@@ -1,0 +1,56 @@
+{
+  "Pentagram": {
+    "deezer_id": 7264,
+    "spotify_id": "0xybuiDEYo3YuT3fLPaIyE",
+    "genre": "Doom & Stoner Metal",
+    "disambiguation": "US Doom Metal band with Bobby Liebling. NOT Mezarkabul / Turkish metal band (ID 1214060)."
+  },
+  "Boris": {
+    "deezer_id": 11507431,
+    "spotify_id": "3EgMK920cIH5aLxFnJ6zSi",
+    "genre": "Doom & Stoner Metal",
+    "disambiguation": "Japanese experimental/drone/doom trio (Wata, Takeshi, Atsuo). NOT Boris Brejcha."
+  },
+  "Eyehategod": {
+    "deezer_id": 3046,
+    "spotify_id": "6kBDZFXuLrZgHnvmPu9NsG",
+    "genre": "Doom & Stoner Metal",
+    "disambiguation": "New Orleans Sludge/Doom Metal pioneers."
+  },
+  "Elder": {
+    "deezer_id": 365198,
+    "spotify_id": "0X380XXQSNBYuleKzav5UO",
+    "genre": "Doom & Stoner Metal",
+    "disambiguation": "US Heavy Psych / Stoner Rock band."
+  },
+  "Acid Bath": {
+    "deezer_id": 20465,
+    "spotify_id": "4htjQW3lgIwL6fEJlTOez4",
+    "genre": "Doom & Stoner Metal",
+    "disambiguation": "Louisiana Sludge Metal band featuring Dax Riggs."
+  },
+  "Monolord": {
+    "deezer_id": 5519812,
+    "spotify_id": "7z12l98gZ9qGq3GU33HfkC",
+    "genre": "Doom & Stoner Metal",
+    "disambiguation": "Swedish Doom / Stoner trio from Gothenburg."
+  },
+  "Witchfinder General": {
+    "deezer_id": 141935,
+    "spotify_id": "3luonLzvSOxdU8ytCaEIK8",
+    "genre": "Doom & Stoner Metal",
+    "disambiguation": "Classic NWOBHM / Traditional Doom Metal."
+  },
+  "The Rocking Dildos": {
+    "deezer_id": 612806,
+    "spotify_id": "2XQpYJb9iO5s8D5kL1zV8",
+    "genre": "Punk & Hardcore",
+    "disambiguation": "German Punk Rock band."
+  },
+  "Ces Cadaveres": {
+    "deezer_id": 118431872,
+    "spotify_id": "46OBksugs9rg1pt0WXy7oP",
+    "genre": "Black Metal",
+    "disambiguation": "Raw Black Metal / Dungeon project."
+  }
+}

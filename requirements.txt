@@ -1,0 +1,4 @@
+yt-dlp>=2025.1.0
+mutagen>=1.47.0
+requests>=2.31.0
+pywebview>=5.0.0

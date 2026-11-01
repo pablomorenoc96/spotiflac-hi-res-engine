@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>SpotiFLAC Hi-Res Engine - Audiophile Curator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
+        <h1>SpotiFLAC</h1>
+        <span>Hi-Res Engine</span>
+      </div>
+    </div>
+
+    <nav class="nav-menu">
+      <div class="nav-item active" onclick="switchTab('download')">
+        <span class="nav-icon">⬇️</span>
+        <span>Descargar</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('library')">
+        <span class="nav-icon">📚</span>
+        <span>Monitor Biblioteca</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('audit')">
+        <span class="nav-icon">🛡️</span>
+        <span>Auditoría Acústica</span>
+      </div>
+      <div class="nav-item" onclick="switchTab('settings')">
+        <span class="nav-icon">⚙️</span>
+        <span>Configuración</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-foobar" onclick="openFoobar()">
+        <span>▶️</span> Abrir foobar2000
+      </button>
+      <div style="font-size: 11px; color: var(--text-muted); text-align: center;">
+        v1.0.0 • Zero Daemons
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main View Container -->
+  <div class="main-wrapper">
+
+    <!-- Top Search Header -->
+    <header class="top-header">
+      <div class="search-box-container">
+        <span class="search-icon-btn">🔍</span>
+        <input 
+          type="text" 
+          id="searchInput" 
+          class="search-input" 
+          placeholder="Pega URL de Spotify/Deezer o busca: Artista - Álbum..." 
+          onkeydown="if(event.key === 'Enter') searchAlbum()"
+        />
+        <button class="btn-search-go" onclick="searchAlbum()">Buscar</button>
+      </div>
+
+      <div class="header-badges">
+        <span class="badge badge-hires">⭐ Hi-Res 24-bit Prioritario</span>
+        <span class="badge badge-audit">🛡️ ffmpeg 0 Errores</span>
+      </div>
+    </header>
+
+    <!-- Tab 1: Descargar -->
+    <section id="tab-download" class="tab-content active">
+
+      <!-- Overall Progress Card (Hidden until downloading) -->
+      <div id="overallProgressCard" class="overall-progress-card">
+        <div class="progress-header">
+          <span id="progressText">Descargando y auditando pistas...</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="progressBarFill" class="progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- Album Hero Preview -->
+      <div id="albumHero" class="album-preview-hero" style="display: none;">
+        <div class="cover-wrapper">
+          <img id="albumCoverImg" class="cover-img" src="" alt="Album Cover">
+        </div>
+        <div class="album-details">
+          <div>
+            <span id="albumTypeBadge" class="album-type">Álbum de Estudio</span>
+            <h2 id="albumTitleText" class="album-title-main">Nombre del Álbum</h2>
+            <div class="album-meta-info">
+              <span>Artista: <strong id="albumArtistText">Artista</strong></span>
+              <span>Año: <strong id="albumYearText">2026</strong></span>
+              <span>Género: <strong id="albumGenreText">Metal</strong></span>
+              <span>Pistas: <strong id="albumTracksCount">0</strong></span>
+            </div>
+          </div>
+          <div class="action-bar">
+            <button id="btnStartDownload" class="btn-primary-download" onclick="startDownload()">
+              <span>⬇️</span> Descargar Álbum Completo
+            </button>
+            <div class="quality-toggle">
+              <span>Calidad:</span>
+              <strong style="color: #fbbf24;">⭐ Hi-Res / 💿 Lossless FLAC</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tracks Table -->
+      <div id="tracklistSection" style="display: none;">
+        <div class="tracks-section-header">
+          <span>Lista de Pistas</span>
+          <span id="tracklistStatusHint" style="font-size: 13px; color: var(--text-muted); font-weight: normal;">Lista oficial para descarga</span>
+        </div>
+
+        <table class="track-table">
+          <thead>
+            <tr>
+              <th class="track-pos">#</th>
+              <th>Título</th>
+              <th>Duración</th>
+              <th>Estado & Resolución</th>
+            </tr>
+          </thead>
+          <tbody id="tracklistTbody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State Default -->
+      <div id="emptySearchState" style="text-align: center; padding: 80px 20px;">
+        <div style="font-size: 48px; margin-bottom: 16px;">💿</div>
+        <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">Descargador de Máxima Calidad</h3>
+        <p style="color: var(--text-muted); font-size: 14px; max-width: 500px; margin: 0 auto 24px;">
+          Pega un enlace de <strong>Spotify</strong>, <strong>Deezer</strong> o simplemente escribe <strong>Artista - Álbum</strong> en la barra superior para buscar metadatos y carátula oficial HD.
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button class="btn-foobar" onclick="document.getElementById('searchInput').value='Boris - ANOTHER NOISE'; searchAlbum();">
+            Probar: Boris - ANOTHER NOISE
+          </button>
+          <button class="btn-foobar" onclick="document.getElementById('searchInput').value='Pentagram - Lightning In A Bottle'; searchAlbum();">
+            Probar: Pentagram - Lightning In A Bottle
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Tab 2: Monitor Biblioteca -->
+    <section id="tab-library" class="tab-content">
+      <div class="banner-action-box">
+        <div class="banner-text">
+          <h3>Monitor y Actualizador de Biblioteca</h3>
+          <p>Escanea en paralelo tus más de 630 artistas y detecta nuevos lanzamientos de estudio automáticamente.</p>
+        </div>
+        <button class="btn-gradient" onclick="scanLibrary()">
+          ⚡ Actualizar Biblioteca (1 Clic)
+        </button>
+      </div>
+
+      <div class="stat-cards-grid">
+        <div class="stat-card">
+          <span class="stat-title">Artistas Catalogados</span>
+          <span class="stat-number">630+</span>
+          <span class="stat-sub">16 géneros ordenados</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">Álbumes Auditados</span>
+          <span class="stat-number">61</span>
+          <span class="stat-sub">100% Carátulas HD</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">Pistas FLAC</span>
+          <span class="stat-number">520</span>
+          <span class="stat-sub">0 pistas corruptas</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">Fidelidad Hi-Res 24-bit</span>
+          <span class="stat-number" style="color: #fbbf24;">74.4%</span>
+          <span class="stat-sub" style="color: #60a5fa;">25.6% Lossless 16-bit</span>
+        </div>
+      </div>
+
+      <div class="tracks-section-header">
+        <span>Artistas Destacados en Memoria</span>
+      </div>
+      <div id="knownArtistsGrid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+        <!-- Filled by JS -->
+      </div>
+    </section>
+
+    <!-- Tab 3: Auditoría & Reparación -->
+    <section id="tab-audit" class="tab-content">
+      <div class="banner-action-box">
+        <div class="banner-text">
+          <h3>Auditoría Acústica & Reparación de Integridad</h3>
+          <p>Comprueba cada archivo con decodificación completa ffmpeg y aplana cualquier carpeta duplicada.</p>
+        </div>
+        <button class="btn-gradient" onclick="runIntegrityAudit()">
+          🛡️ Ejecutar Auditoría Completa
+        </button>
+      </div>
+
+      <div class="tracks-section-header">
+        <span>Registro de Eventos y Auditoría en Vivo</span>
+      </div>
+      <div id="auditLogBox" class="log-box">
+        <div class="log-line-info">[INFO] Sistema listo para auditar. Cero procesos en segundo plano.</div>
+        <div class="log-line-success">[SUCCESS] 520 pistas pasaron la prueba acústica con 0 errores.</div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Configuración -->
+    <section id="tab-settings" class="tab-content">
+      <div class="tracks-section-header">
+        <span>Ajustes del Sistema</span>
+      </div>
+
+      <div style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 24px; display: flex; flex-direction: column; gap: 20px; max-width: 600px;">
+        <div>
+          <label style="font-size: 13px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 6px;">
+            Ruta Maestra de la Biblioteca
+          </label>
+          <input type="text" class="search-input" value="D:\MUSICA" readonly style="cursor: not-allowed;" />
+        </div>
+
+        <div>
+          <label style="font-size: 13px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 6px;">
+            Prioridad de Calidad
+          </label>
+          <select class="search-input" style="cursor: pointer;">
+            <option>⭐ Máxima Posible: Hi-Res 24-bit / Fallback FLAC 16-bit (Recomendado)</option>
+            <option>💿 Estricto Lossless 16-bit / 44.1 kHz (CD Quality)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-size: 13px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 6px;">
+            Reproductor Asociado
+          </label>
+          <input type="text" class="search-input" value="foobar2000 Portable (Georgia-ReBORN v3.0-RC3)" readonly style="cursor: not-allowed;" />
+        </div>
+
+        <div style="padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+          <button class="btn-gradient" onclick="window.close()" style="background: #ef4444;">
+            Cerrar Aplicación
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

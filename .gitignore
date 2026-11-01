@@ -1,0 +1,87 @@
+# ==============================================================================
+# SPOTIFLAC HI-RES ENGINE - GITIGNORE
+# Exclude hundreds of gigabytes of music, cover art, temporary streams, & backups
+# ==============================================================================
+
+# Audio Files (Lossless & Hi-Res)
+*.flac
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.ogg
+*.opus
+*.wma
+*.alac
+*.aiff
+
+# Images & Album Art
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.bmp
+*.gif
+*.ico
+
+# Genre and Music Directories (Do NOT track the music library itself)
+/Black Metal/
+/Death Metal/
+/Doom & Stoner Metal/
+/Electronic & Synthwave/
+/Gothic, Darkwave & Industrial/
+/Heavy & Power Metal/
+/Hip Hop & Phonk/
+/NSBM/
+/Playlist/
+/Punk & Hardcore/
+/Rock & Classic Rock/
+/Salsa & Música Latina/
+/Salsa & Msica Latina/
+/Clásica, Folk & Bandas Sonoras/
+/Clsica, Folk & Bandas Sonoras/
+/Thrash Metal/
+/Vaporwave, Ambient & Experimental/
+/Videoder/
+/Album/
+/_ENTRADA_DESCARGAS/
+
+# Temporary, Staging, and Scratch
+_staging/
+_batch_staging/
+_boris_staging/
+*.part
+*.ytdl
+*.tmp
+*.log
+*.bak
+*.swp
+__pycache__/
+*.py[cod]
+
+# Local runtime state & personal queue files
+_MONITOR_LANZAMIENTOS.json
+HISTORIAL_ACTUALIZACIONES.txt
+_ALBUMES_CON_PISTAS_FALTANTES.txt
+ENLACES_ALBUMES_PARA_DESCARGAR.txt
+_CATALOGO_GENEROS_Y_BANDAS.txt
+completar_electric_wizard.py
+descargar_reparar_cuarentena.py
+
+# Foobar2000 Backups
+_FOOBAR_BACKUP_*/
+_FOOBAR_CONFIG_BACKUP/
+
+# Internal Agent & Session Control Files (Strictly Local)
+.agents/
+.memory/
+.handoffs/
+AGENTS.md
+*.md.bak
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
