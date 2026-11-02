@@ -137,14 +137,22 @@
 
       <!-- Discography Section -->
       <div id="discographySection" style="display: none;">
-        <div class="banner-action-box" style="margin-bottom: 24px;">
+        <div class="banner-action-box" style="margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
           <div class="banner-text">
             <h3 id="discoArtistTitle">Discografía Oficial</h3>
             <p id="discoArtistSub">Todos los álbumes de estudio oficiales detectados en Deezer API.</p>
           </div>
-          <button id="btnDownloadAllDisco" class="btn-gradient" onclick="downloadAllDiscography()">
-            ⚡ Descargar Toda la Discografía en Hi-Res
-          </button>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button class="btn-foobar" style="padding: 8px 14px;" onclick="toggleSelectAllDisco(true)">
+              ☑️ Marcar Todos
+            </button>
+            <button class="btn-foobar" style="padding: 8px 14px;" onclick="toggleSelectAllDisco(false)">
+              ⬜ Desmarcar
+            </button>
+            <button id="btnDownloadSelectedDisco" class="btn-gradient" onclick="downloadSelectedDiscography()">
+              ⚡ Descargar Seleccionados (0) en Hi-Res
+            </button>
+          </div>
         </div>
 
         <div id="discoAlbumsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px;">

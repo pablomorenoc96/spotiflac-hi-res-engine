@@ -82,24 +82,39 @@ function renderDiscographyView(data) {
   document.getElementById('discographySection').style.display = 'block';
 
   document.getElementById('discoArtistTitle').innerText = `${data.artist} — Discografía (${data.genre})`;
-  document.getElementById('discoArtistSub').innerText = `${data.albums.length} lanzamientos oficiales detectados. Compara automáticamente con tu biblioteca.`;
+  document.getElementById('discoArtistSub').innerText = `${data.albums.length} lanzamientos oficiales detectados. Selecciona los álbumes que deseas descargar o marca todos.`;
 
   const grid = document.getElementById('discoAlbumsGrid');
   grid.innerHTML = '';
 
   data.albums.forEach(alb => {
     const card = document.createElement('div');
-    card.className = 'disco-album-card';
     const isComp = alb.already_downloaded;
+    const isChecked = !isComp;
+    card.id = `disco-card-${alb.id}`;
+    card.className = `disco-album-card ${isChecked ? 'selected' : ''}`;
+    
+    card.onclick = (e) => {
+      if (e.target.tagName.toLowerCase() === 'button' || e.target.classList.contains('disco-checkbox')) return;
+      const chk = document.getElementById(`disco-chk-${alb.id}`);
+      if (chk) {
+        chk.checked = !chk.checked;
+        onAlbumCheckboxChange(chk.checked, alb.id);
+      }
+    };
+
     const badgeStatus = isComp 
       ? `<span class="badge" style="background: rgba(16,185,129,0.2); color: #34d399; font-size: 11px;">✅ En Biblioteca (${alb.local_tracks} pistas)</span>`
       : `<span class="badge" style="background: rgba(59,130,246,0.2); color: #60a5fa; font-size: 11px;">⏳ Pendiente</span>`;
 
     const actionBtn = isComp
       ? `<button class="btn-foobar" style="padding: 6px; font-size: 11px; margin-top: auto;" onclick="document.getElementById('searchInput').value='${data.artist} - ${alb.title}'; searchAlbum();">Ver Pistas</button>`
-      : `<button class="btn-primary-download" style="padding: 8px 12px; font-size: 11px; justify-content: center; margin-top: auto;" onclick="document.getElementById('searchInput').value='${data.artist} - ${alb.title}'; searchAlbum();">Descargar Álbum</button>`;
+      : `<button class="btn-primary-download" style="padding: 8px 12px; font-size: 11px; justify-content: center; margin-top: auto;" onclick="document.getElementById('searchInput').value='${data.artist} - ${alb.title}'; searchAlbum();">Descargar Solo Este</button>`;
 
     card.innerHTML = `
+      <div class="disco-card-top-row">
+        <input type="checkbox" id="disco-chk-${alb.id}" class="disco-checkbox" ${isChecked ? 'checked' : ''} onchange="onAlbumCheckboxChange(this.checked, '${alb.id}')" />
+      </div>
       <img class="disco-album-cover" src="${alb.cover || ''}" alt="${alb.title}" />
       <div class="disco-album-title" title="${alb.title}">${alb.title}</div>
       <div class="disco-album-year">[${alb.year}] • ${alb.type}</div>
@@ -108,34 +123,96 @@ function renderDiscographyView(data) {
     `;
     grid.appendChild(card);
   });
+
+  updateSelectedCount();
 }
 
-// Download All Missing Albums in Discography
-async function downloadAllDiscography() {
+function onAlbumCheckboxChange(checked, albId) {
+  const card = document.getElementById(`disco-card-${albId}`);
+  if (card) {
+    if (checked) card.classList.add('selected');
+    else card.classList.remove('selected');
+  }
+  updateSelectedCount();
+}
+
+function toggleSelectAllDisco(check) {
   if (!currentDiscographyData || !currentDiscographyData.albums) return;
-  const missing = currentDiscographyData.albums.filter(a => !a.already_downloaded);
-  if (missing.length === 0) {
-    alert("¡Todos los álbumes de esta discografía ya están en tu biblioteca!");
+  currentDiscographyData.albums.forEach(alb => {
+    const chk = document.getElementById(`disco-chk-${alb.id}`);
+    const card = document.getElementById(`disco-card-${alb.id}`);
+    if (chk) chk.checked = check;
+    if (card) {
+      if (check) card.classList.add('selected');
+      else card.classList.remove('selected');
+    }
+  });
+  updateSelectedCount();
+}
+
+function updateSelectedCount() {
+  const checkboxes = document.querySelectorAll('.disco-checkbox');
+  let selected = 0;
+  checkboxes.forEach(c => { if (c.checked) selected++; });
+  const btn = document.getElementById('btnDownloadSelectedDisco');
+  if (btn) {
+    btn.innerText = `⚡ Descargar Seleccionados (${selected}) en Hi-Res`;
+    btn.disabled = (selected === 0);
+  }
+}
+
+// Download Only Selected Albums in Discography
+async function downloadSelectedDiscography() {
+  if (!currentDiscographyData || !currentDiscographyData.albums) return;
+  
+  const selectedAlbums = currentDiscographyData.albums.filter(alb => {
+    const chk = document.getElementById(`disco-chk-${alb.id}`);
+    return chk && chk.checked;
+  });
+
+  if (selectedAlbums.length === 0) {
+    alert("Por favor, selecciona al menos un álbum marcando la casilla.");
     return;
   }
 
-  const confirmDownload = confirm(`Se descargarán ${missing.length} álbumes pendientes de ${currentDiscographyData.artist}. ¿Deseas continuar?`);
+  const confirmDownload = confirm(`Se descargarán ${selectedAlbums.length} álbum(es) seleccionados de ${currentDiscographyData.artist}. ¿Deseas iniciar la descarga en Hi-Res?`);
   if (!confirmDownload) return;
 
-  const btnAll = document.getElementById('btnDownloadAllDisco');
-  btnAll.disabled = true;
-  btnAll.innerText = "Descargando Discografía...";
+  const btnSelected = document.getElementById('btnDownloadSelectedDisco');
+  btnSelected.disabled = true;
 
-  for (let i = 0; i < missing.length; i++) {
-    const alb = missing[i];
+  for (let i = 0; i < selectedAlbums.length; i++) {
+    const alb = selectedAlbums[i];
+    btnSelected.innerText = `Descargando (${i + 1}/${selectedAlbums.length}): ${alb.title}...`;
+    
+    // Set card visual cue
+    const card = document.getElementById(`disco-card-${alb.id}`);
+    if (card) {
+      const badge = card.querySelector('.badge');
+      if (badge) {
+        badge.style.background = 'rgba(245,158,11,0.2)';
+        badge.style.color = '#fbbf24';
+        badge.innerText = '⬇️ Descargando...';
+      }
+    }
+
     document.getElementById('searchInput').value = `${currentDiscographyData.artist} - ${alb.title}`;
     await searchAlbum();
     await startDownload();
+
+    if (card) {
+      const badge = card.querySelector('.badge');
+      if (badge) {
+        badge.style.background = 'rgba(16,185,129,0.2)';
+        badge.style.color = '#34d399';
+        badge.innerText = '✅ En Biblioteca';
+      }
+    }
   }
 
-  btnAll.disabled = false;
-  btnAll.innerText = "⚡ Descargar Toda la Discografía en Hi-Res";
-  alert(`¡Discografía de ${currentDiscographyData.artist} descargada y auditada con éxito!`);
+  btnSelected.disabled = false;
+  btnSelected.innerText = "⚡ Descargar Seleccionados en Hi-Res";
+  alert(`¡Descarga completada! Se integraron ${selectedAlbums.length} álbumes en tu biblioteca.`);
   searchDiscography();
 }
 

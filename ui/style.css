@@ -582,6 +582,7 @@ body {
 
 /* Discography Cards Grid */
 .disco-album-card {
+  position: relative;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -589,10 +590,36 @@ body {
   display: flex;
   flex-direction: column;
   transition: all 0.2s ease;
+  user-select: none;
 }
 .disco-album-card:hover {
   border-color: var(--accent-purple);
   transform: translateY(-2px);
+}
+.disco-album-card.selected {
+  border-color: var(--accent-purple);
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.12), var(--bg-card));
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.3);
+}
+.disco-card-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  z-index: 2;
+  pointer-events: none;
+}
+.disco-checkbox {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--accent-purple);
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.8);
 }
 .disco-album-cover {
   width: 100%;
