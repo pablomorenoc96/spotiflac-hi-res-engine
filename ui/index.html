@@ -51,16 +51,18 @@
 
     <!-- Top Search Header -->
     <header class="top-header">
-      <div class="search-box-container">
+      <div class="search-box-container" style="width: 540px;">
         <span class="search-icon-btn">🔍</span>
         <input 
           type="text" 
           id="searchInput" 
           class="search-input" 
-          placeholder="Pega URL de Spotify/Deezer o busca: Artista - Álbum..." 
+          placeholder="Busca Artista, Álbum o pega URL de Spotify/Deezer..." 
           onkeydown="if(event.key === 'Enter') searchAlbum()"
+          style="padding-right: 175px;"
         />
-        <button class="btn-search-go" onclick="searchAlbum()">Buscar</button>
+        <button class="btn-search-go" style="right: 76px; background: #3b82f6;" onclick="searchDiscography()">Discografía</button>
+        <button class="btn-search-go" onclick="searchAlbum()">Álbum</button>
       </div>
 
       <div class="header-badges">
@@ -131,6 +133,23 @@
             <!-- Dynamically populated -->
           </tbody>
         </table>
+      </div>
+
+      <!-- Discography Section -->
+      <div id="discographySection" style="display: none;">
+        <div class="banner-action-box" style="margin-bottom: 24px;">
+          <div class="banner-text">
+            <h3 id="discoArtistTitle">Discografía Oficial</h3>
+            <p id="discoArtistSub">Todos los álbumes de estudio oficiales detectados en Deezer API.</p>
+          </div>
+          <button id="btnDownloadAllDisco" class="btn-gradient" onclick="downloadAllDiscography()">
+            ⚡ Descargar Toda la Discografía en Hi-Res
+          </button>
+        </div>
+
+        <div id="discoAlbumsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px;">
+          <!-- Populated by JS -->
+        </div>
       </div>
 
       <!-- Empty State Default -->

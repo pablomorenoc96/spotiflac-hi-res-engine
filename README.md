@@ -92,14 +92,21 @@ Double-click `INICIAR_APP.bat` or run:
 python app.py
 ```
 
-### 3. Interactive CLI Download (1-Click)
+### 3. Complete Artist Discography Download (1-Click)
+Double-click `DESCARGAR_DISCOGRAFIA.bat` or run:
+```bash
+python descargar_discografia.py "Acid Bath"
+```
+Or paste a Spotify/Deezer artist URL. Automatically resolves the entire studio discography, checks your library to skip existing albums, and downloads all missing albums in Hi-Res with official 1000x1000 artwork.
+
+### 4. Interactive Single Release Download (1-Click)
 Double-click `DESCARGAR_MUSICA.bat` or run:
 ```bash
 python descargar_musica.py "Electric Wizard - Dopethrone"
 ```
 Or pass a Spotify / Deezer URL. The engine handles metadata, HD artwork, downloading, auditing, tagging, and folder organization automatically.
 
-### 4. Library Monitor & Automatic Updater (1-Click)
+### 5. Library Monitor & Automatic Updater (1-Click)
 Double-click `ACTUALIZAR_BIBLIOTECA.bat` or run:
 ```bash
 python actualizar_biblioteca.py
@@ -123,6 +130,16 @@ Scans all cataloged artist folders in parallel, discovers official new studio re
 │   └── app.js                  # Frontend bridge controller
 ├── app.py                      # Desktop GUI application (PyWebView)
 ├── INICIAR_APP.bat             # 1-click GUI desktop launcher
+├── DESCARGAR_DISCOGRAFIA.bat   # 1-click full discography downloader
+├── descargar_discografia.py    # Complete discography downloader script
+├── ACTUALIZAR_BIBLIOTECA.bat   # 1-click batch library updater
+├── actualizar_biblioteca.py    # Library updater script
+├── DESCARGAR_MUSICA.bat        # 1-click interactive CLI downloader
+├── descargar_musica.py         # Interactive CLI downloader script
+├── requirements.txt            # Python dependencies
+├── .gitignore                  # Audio, images, cache & local exclusion rules
+└── LICENSE                     # MIT License
+```
 ├── ACTUALIZAR_BIBLIOTECA.bat   # 1-click batch library updater
 ├── actualizar_biblioteca.py    # Library updater script
 ├── DESCARGAR_MUSICA.bat        # 1-click interactive CLI downloader

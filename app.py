@@ -70,12 +70,12 @@ def detect_genre_for_artist(artist_name):
 
 class SpotiFLACBridge:
     def __init__(self):
-        self.window = None
-        self.current_album = None
-        self.is_downloading = False
+        self._window = None
+        self._current_album = None
+        self._is_downloading = False
 
     def set_window(self, window):
-        self.window = window
+        self._window = window
 
     def search(self, query):
         """
@@ -131,7 +131,7 @@ class SpotiFLACBridge:
                 "duration": t.get("duration", 0),
             })
 
-        self.current_album = {
+        self._current_album = {
             "artist": artist,
             "title": title,
             "year": year,
@@ -140,18 +140,18 @@ class SpotiFLACBridge:
             "tracks": tracks
         }
 
-        return {"success": True, "album": self.current_album}
+        return {"success": True, "album": self._current_album}
 
     def download_current_album(self):
         """
         Executes atomic download of current album tracks with Hi-Res priority.
         Updates JS progress in real time.
         """
-        if not self.current_album or not self.current_album.get("tracks"):
+        if not self._current_album or not self._current_album.get("tracks"):
             return {"success": False, "error": "No hay álbum seleccionado."}
 
-        self.is_downloading = True
-        alb = self.current_album
+        self._is_downloading = True
+        alb = self._current_album
         artist = alb["artist"]
         album_title = alb["title"]
         year = alb["year"]
@@ -178,8 +178,8 @@ class SpotiFLACBridge:
             pct = int((idx / total) * 100)
 
             # Signal downloading
-            if self.window:
-                self.window.evaluate_js(f"window.onTrackProgress({idx}, {total}, 'downloading', '', {pct});")
+            if self._window:
+                self._window.evaluate_js(f"window.onTrackProgress({idx}, {total}, 'downloading', '', {pct});")
 
             success, label = download_single_track(
                 artist, album_title, t_title, pos, total, year, genre, target_dir
@@ -188,13 +188,13 @@ class SpotiFLACBridge:
             end_pct = int(((idx + 1) / total) * 100)
             if success:
                 completed += 1
-                if self.window:
-                    self.window.evaluate_js(f"window.onTrackProgress({idx}, {total}, 'completed', '{label}', {end_pct});")
+                if self._window:
+                    self._window.evaluate_js(f"window.onTrackProgress({idx}, {total}, 'completed', '{label}', {end_pct});")
             else:
-                if self.window:
-                    self.window.evaluate_js(f"window.onTrackProgress({idx}, {total}, 'failed', 'Fallo', {end_pct});")
+                if self._window:
+                    self._window.evaluate_js(f"window.onTrackProgress({idx}, {total}, 'failed', 'Fallo', {end_pct});")
 
-        self.is_downloading = False
+        self._is_downloading = False
         return {"success": True, "completed": completed, "total": total}
 
     def open_foobar(self):
@@ -222,6 +222,44 @@ class SpotiFLACBridge:
             except Exception as e:
                 return {"success": False, "error": str(e)}
         return {"success": False, "error": "actualizar_biblioteca.py no encontrado."}
+
+    def get_artist_discography(self, query):
+        """
+        Discovers full discography from Deezer API with local completion status.
+        """
+        from descargar_discografia import resolve_artist_id, get_artist_albums, find_existing_album_folder, is_album_complete
+        artist_name, artist_id = resolve_artist_id(query)
+        if not artist_id:
+            return {"success": False, "error": f"No se encontró artista oficial para '{query}'"}
+
+        genre = detect_genre_for_artist(artist_name)
+        clean_art = sanitize_filename(artist_name)
+        artist_dir = os.path.join(ROOT_DIR, genre, clean_art)
+        raw_albums = get_artist_albums(artist_id)
+
+        albums_res = []
+        for a in raw_albums:
+            title = a.get("title", "Desconocido")
+            year = a.get("release_date", "2026")[:4]
+            existing = find_existing_album_folder(artist_dir, title)
+            complete, track_count = is_album_complete(existing) if existing else (False, 0)
+            albums_res.append({
+                "id": a.get("id"),
+                "title": title,
+                "year": year,
+                "type": a.get("record_type", "album").upper(),
+                "cover": a.get("cover_xl") or a.get("cover_big") or a.get("cover_medium") or "",
+                "already_downloaded": complete,
+                "local_tracks": track_count
+            })
+
+        return {
+            "success": True,
+            "artist": artist_name,
+            "artist_id": artist_id,
+            "genre": genre,
+            "albums": albums_res
+        }
 
     def run_audit(self):
         """

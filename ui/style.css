@@ -579,3 +579,39 @@ body {
 .log-line-info { color: #60a5fa; }
 .log-line-warn { color: #fbbf24; }
 .log-line-error { color: #f87171; }
+
+/* Discography Cards Grid */
+.disco-album-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+}
+.disco-album-card:hover {
+  border-color: var(--accent-purple);
+  transform: translateY(-2px);
+}
+.disco-album-cover {
+  width: 100%;
+  aspect-ratio: 1/1;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  margin-bottom: 10px;
+  background-color: #12151b;
+}
+.disco-album-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.disco-album-year {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}

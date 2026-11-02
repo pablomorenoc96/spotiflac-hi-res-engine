@@ -4,6 +4,7 @@
  */
 
 let currentAlbumData = null;
+let currentDiscographyData = null;
 let isDownloading = false;
 
 // 1. Tab Navigation
@@ -38,6 +39,104 @@ function formatDuration(sec) {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
+// 3. Search Full Artist Discography
+async function searchDiscography() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+
+  const btnDisco = document.querySelectorAll('.btn-search-go')[0];
+  const origText = btnDisco.innerText;
+  btnDisco.innerText = "Cargando...";
+  btnDisco.disabled = true;
+
+  try {
+    if (!window.pywebview || !window.pywebview.api) {
+      alert("La API de SpotiFLAC Hi-Res Engine no está conectada.");
+      return;
+    }
+
+    const data = await window.pywebview.api.get_artist_discography(query);
+    if (!data || !data.success) {
+      alert(data && data.error ? data.error : "No se encontró discografía para este artista.");
+      return;
+    }
+
+    currentDiscographyData = data;
+    renderDiscographyView(data);
+  } catch (err) {
+    console.error("Error al buscar discografía:", err);
+    alert("Error al buscar discografía: " + err);
+  } finally {
+    btnDisco.innerText = origText;
+    btnDisco.disabled = false;
+  }
+}
+
+function renderDiscographyView(data) {
+  switchTab('download');
+  document.getElementById('emptySearchState').style.display = 'none';
+  document.getElementById('albumHero').style.display = 'none';
+  document.getElementById('tracklistSection').style.display = 'none';
+  document.getElementById('discographySection').style.display = 'block';
+
+  document.getElementById('discoArtistTitle').innerText = `${data.artist} — Discografía (${data.genre})`;
+  document.getElementById('discoArtistSub').innerText = `${data.albums.length} lanzamientos oficiales detectados. Compara automáticamente con tu biblioteca.`;
+
+  const grid = document.getElementById('discoAlbumsGrid');
+  grid.innerHTML = '';
+
+  data.albums.forEach(alb => {
+    const card = document.createElement('div');
+    card.className = 'disco-album-card';
+    const isComp = alb.already_downloaded;
+    const badgeStatus = isComp 
+      ? `<span class="badge" style="background: rgba(16,185,129,0.2); color: #34d399; font-size: 11px;">✅ En Biblioteca (${alb.local_tracks} pistas)</span>`
+      : `<span class="badge" style="background: rgba(59,130,246,0.2); color: #60a5fa; font-size: 11px;">⏳ Pendiente</span>`;
+
+    const actionBtn = isComp
+      ? `<button class="btn-foobar" style="padding: 6px; font-size: 11px; margin-top: auto;" onclick="document.getElementById('searchInput').value='${data.artist} - ${alb.title}'; searchAlbum();">Ver Pistas</button>`
+      : `<button class="btn-primary-download" style="padding: 8px 12px; font-size: 11px; justify-content: center; margin-top: auto;" onclick="document.getElementById('searchInput').value='${data.artist} - ${alb.title}'; searchAlbum();">Descargar Álbum</button>`;
+
+    card.innerHTML = `
+      <img class="disco-album-cover" src="${alb.cover || ''}" alt="${alb.title}" />
+      <div class="disco-album-title" title="${alb.title}">${alb.title}</div>
+      <div class="disco-album-year">[${alb.year}] • ${alb.type}</div>
+      <div style="margin-bottom: 10px;">${badgeStatus}</div>
+      ${actionBtn}
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// Download All Missing Albums in Discography
+async function downloadAllDiscography() {
+  if (!currentDiscographyData || !currentDiscographyData.albums) return;
+  const missing = currentDiscographyData.albums.filter(a => !a.already_downloaded);
+  if (missing.length === 0) {
+    alert("¡Todos los álbumes de esta discografía ya están en tu biblioteca!");
+    return;
+  }
+
+  const confirmDownload = confirm(`Se descargarán ${missing.length} álbumes pendientes de ${currentDiscographyData.artist}. ¿Deseas continuar?`);
+  if (!confirmDownload) return;
+
+  const btnAll = document.getElementById('btnDownloadAllDisco');
+  btnAll.disabled = true;
+  btnAll.innerText = "Descargando Discografía...";
+
+  for (let i = 0; i < missing.length; i++) {
+    const alb = missing[i];
+    document.getElementById('searchInput').value = `${currentDiscographyData.artist} - ${alb.title}`;
+    await searchAlbum();
+    await startDownload();
+  }
+
+  btnAll.disabled = false;
+  btnAll.innerText = "⚡ Descargar Toda la Discografía en Hi-Res";
+  alert(`¡Discografía de ${currentDiscographyData.artist} descargada y auditada con éxito!`);
+  searchDiscography();
 }
 
 // 3. Search Album / Spotify URL / Deezer URL
@@ -290,8 +389,7 @@ function renderKnownArtists(artistsMap) {
     card.onmouseout = () => { card.style.borderColor = 'var(--border-color)'; };
     card.onclick = () => {
       document.getElementById('searchInput').value = name;
-      searchAlbum();
-      switchTab('download');
+      searchDiscography();
     };
 
     card.innerHTML = `
