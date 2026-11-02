@@ -21,9 +21,12 @@
   * Every audio file is audited on-the-fly with an end-to-end decode pass using `ffmpeg -v error -i <file> -f null -`. Files with even 1 byte of corruption are discarded and re-downloaded from alternate streams.
 * **Modern Desktop GUI (PyWebView & Edge WebView2)**:
   * Glassmorphism dark theme inspired by Spotify and SpotiFLAC.
+  * Interactive Discography Explorer with smart local library diffing and checkbox multi-selection.
   * Real-time download progress bar and per-track acoustic verification status badges.
   * 1000x1000 HD cover art previews and album metadata inspection.
   * Direct 1-click launcher for foobar2000 Georgia-ReBORN.
+* **Full Discography & Multi-Select Engine**:
+  * Download complete discographies or select specific albums via interactive checkboxes with real-time library comparison (`✅ En Biblioteca` vs `⏳ Pendiente`).
 * **Discography Anchoring & Homonym Protection**:
   * Cross-references Deezer and Spotify catalog IDs to prevent homonym collisions (e.g. Bobby Liebling's US Pentagram vs Turkish Pentagram).
 * **Official HD Artwork & Vorbis Comments**:
@@ -64,13 +67,19 @@ Launch the desktop interface with a single double-click on **`INICIAR_APP.bat`**
    * Accepts Spotify album/track URLs, Deezer URLs, or plain text (`Artist - Album`).
    * Fetches official tracklists, release year, genre, and 1000x1000 artwork.
    * Real-time progress bar with per-track status badges (`⏳ Pendiente`, `⬇️ Descargando...`, `🛡️ Auditando ffmpeg...`, `⭐ Hi-Res FLAC`).
-2. **Library Monitor Tab**:
+2. **Interactive Discography Explorer & Multi-Select Batch Downloader**:
+   * Discover complete studio discographies with one click using the dedicated **`Discografía`** search button or by clicking any artist card in the Library Monitor.
+   * **Smart Library Diffing**: Instantly compares online catalogs against your local music vault, marking existing albums as `✅ En Biblioteca` (with audited track counts) and pending releases as `⏳ Pendiente`.
+   * **Interactive Checkbox Multi-Selection**: Select or deselect albums individually by clicking cards or checkboxes with real-time glow feedback.
+   * **Batch Action Toolbar**: Includes `☑️ Marcar Todos` (Select All), `⬜ Desmarcar` (Clear All), and a live counter button `⚡ Descargar Seleccionados (X) en Hi-Res` to queue and download only your chosen releases in sequence.
+   * **Per-Album Discrete Actions**: Quick-download buttons on each individual card to download single albums without leaving the discography view.
+3. **Library Monitor Tab**:
    * Displays live metrics of your collection (cataloged artists, audited albums, FLAC track count, and Hi-Res percentage).
    * 1-Click Library Update button to detect new studio releases across all cataloged artists.
    * Quick-launch artist cards from the verified disambiguation catalog.
-3. **Acoustic Audit Tab**:
+4. **Acoustic Audit Tab**:
    * Real-time verification log showing stream decoding and bit-depth status.
-4. **foobar2000 Integration**:
+5. **foobar2000 Integration**:
    * Integrated sidebar launcher for portable foobar2000 with Georgia-ReBORN theme.
 
 ---
