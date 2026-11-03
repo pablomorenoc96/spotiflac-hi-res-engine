@@ -196,8 +196,8 @@ def audit_library_integrity(root_dir=r"D:\MUSICA", check_audio_samples=False, pr
                     if tm:
                         track_nums.append(int(tm.group(1)))
 
-                if track_nums and len(track_nums) > 1:
-                    full_range = set(range(min(track_nums), max(track_nums) + 1))
+                if track_nums:
+                    full_range = set(range(1, max(track_nums) + 1))
                     gaps = sorted(list(full_range - set(track_nums)))
                     if gaps:
                         partial_albums.append({
@@ -209,6 +209,26 @@ def audit_library_integrity(root_dir=r"D:\MUSICA", check_audio_samples=False, pr
                             "present_tracks": len(track_nums),
                             "missing_tracks": gaps
                         })
+
+                # Detectar archivos truncados por tamaño anormal o temporales abortados
+                for sub_r, _, sub_f in os.walk(root):
+                    for f in sub_f:
+                        fp = os.path.join(sub_r, f)
+                        ext = os.path.splitext(f.lower())[1]
+                        if ext in {'.part', '.ytdl', '.tmp'} or f.endswith('.temp'):
+                            corrupted_tracks.append({
+                                "path": fp,
+                                "error": f"ARCHIVO_TEMPORAL_INTERRUMPIDO ({f})"
+                            })
+                        elif ext in audio_extensions:
+                            try:
+                                if os.path.getsize(fp) < 100000:
+                                    corrupted_tracks.append({
+                                        "path": fp,
+                                        "error": f"PISTA_TRUNCADA ({os.path.getsize(fp)} bytes)"
+                                    })
+                            except Exception:
+                                pass
 
                 # Muestreo acústico opcional con ffmpeg
                 if check_audio_samples and flac_files:

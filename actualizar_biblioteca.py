@@ -340,14 +340,21 @@ def scan_local_library():
                 year_found = int(m.group(1))
                 alb_title = m.group(2).strip()
 
-                # Verificar si contiene al menos 1 pista de audio válida
-                has_audio = False
+                # Verificar si contiene al menos 1 pista de audio válida y detectar pistas truncadas
+                audio_files = []
+                truncated_files = []
                 for r, _, f_list in os.walk(root):
-                    if any(os.path.splitext(f.lower())[1] in AUDIO_EXTENSIONS for f in f_list):
-                        has_audio = True
-                        break
+                    for f in f_list:
+                        ext = os.path.splitext(f.lower())[1]
+                        if ext in AUDIO_EXTENSIONS:
+                            fp = os.path.join(r, f)
+                            sz = os.path.getsize(fp) if os.path.exists(fp) else 0
+                            if sz < 100000:
+                                truncated_files.append(f)
+                            else:
+                                audio_files.append(f)
 
-                if not has_audio:
+                if not audio_files:
                     # Álbum incompleto (solo carátula o 0 archivos de audio)
                     all_sub_files = [f for _, _, sf in os.walk(root) for f in sf]
                     if not all_sub_files:
@@ -365,11 +372,46 @@ def scan_local_library():
                         "artist": clean_artist_name,
                         "genre": genre,
                         "reason": reason,
-                        "files": all_sub_files[:3]
+                        "files": all_sub_files[:3],
+                        "missing_tracks": []
                     }
                     incomplete_albums.append(inc_info)
                     total_incomplete.append(inc_info)
                     continue
+
+                # Si tiene archivos de audio, verificar si tiene huecos en la secuencia de pistas
+                track_nums = []
+                for f in audio_files:
+                    tm = re.match(r"^(\d+)", f)
+                    if tm:
+                        track_nums.append(int(tm.group(1)))
+
+                missing_tracks = []
+                if track_nums:
+                    full_set = set(range(1, max(track_nums) + 1))
+                    gaps = sorted(list(full_set - set(track_nums)))
+                    if gaps:
+                        missing_tracks.extend(gaps)
+
+                if missing_tracks or truncated_files:
+                    reasons = []
+                    if missing_tracks:
+                        reasons.append(f"FALTAN_PISTAS_{missing_tracks}")
+                    if truncated_files:
+                        reasons.append(f"PISTAS_TRUNCADAS_{truncated_files}")
+                    inc_info = {
+                        "folder_name": folder_name,
+                        "path": root,
+                        "year": str(year_found),
+                        "title": alb_title,
+                        "artist": clean_artist_name,
+                        "genre": genre,
+                        "reason": " + ".join(reasons),
+                        "files": audio_files[:3],
+                        "missing_tracks": missing_tracks
+                    }
+                    incomplete_albums.append(inc_info)
+                    total_incomplete.append(inc_info)
 
                 if 1950 <= year_found <= current_year + 1 and year_found > max_year:
                     max_year = year_found
