@@ -287,13 +287,16 @@ def process_inbox(artists_map):
 # ESCANEO DE BIBLIOTECA LOCAL
 # =============================================================================
 
+AUDIO_EXTENSIONS = {'.flac', '.mp3', '.m4a', '.ogg', '.wav', '.opus'}
+
 def scan_local_library():
     r"""
     Escanea exhaustivamente D:\MUSICA detectando todos los géneros, artistas,
-    álbumes conocidos y el año de lanzamiento más reciente en disco.
+    álbumes conocidos completos y detecta carpetas incompletas (solo portada o 0 pistas).
     """
     print("[*] Escaneando catálogo de artistas en D:\\MUSICA...")
     artists = {}
+    total_incomplete = []
     current_year = datetime.now().year
     
     for genre in sorted(os.listdir(ROOT_DIR)):
@@ -308,34 +311,71 @@ def scan_local_library():
                 
             known_albums = set()
             known_clean_albums = set()
+            incomplete_albums = []
             max_year = 0
             
+            # Limpiar nombre de artista para consultas
+            clean_artist_name = re.sub(r'\s*\(\d{4}\).*$', '', artist).strip()
+            clean_artist_name = re.sub(r'\s*-\s*\d{4}.*$', '', clean_artist_name).strip()
+
             # 1. Año en nombre de la carpeta de artista si existe
             for y in re.findall(r'\b(19\d\d|20\d\d)\b', artist):
                 yi = int(y)
                 if 1950 <= yi <= current_year + 1 and yi > max_year:
                     max_year = yi
                     
-            # 2. Subcarpetas de álbumes
+            # 2. Subcarpetas de álbumes (solo se consideran conocidos si tienen audio real)
+            seen_alb_dirs = set()
             for root, dirs, files in os.walk(artist_path):
-                for d in dirs:
-                    if d.lower() in {'scans', 'artwork', 'covers', 'cover', 'video', 'cd1', 'cd2', 'flac'}:
-                        continue
-                    m = re.match(r"\[(\d{4})\]\s*(.*)", d)
-                    if m:
-                        yi = int(m.group(1))
-                        if 1950 <= yi <= current_year + 1 and yi > max_year:
-                            max_year = yi
-                        alb_title = m.group(2).strip()
-                        known_albums.add(alb_title.lower())
-                        known_clean_albums.add(clean_album_base(alb_title))
+                folder_name = os.path.basename(root)
+                if folder_name.lower() in {'scans', 'artwork', 'covers', 'cover', 'video', 'cd1', 'cd2', 'flac'}:
+                    continue
+                m = re.match(r"^\[(\d{4})\]\s*(.*)", folder_name)
+                if not m:
+                    continue
+                if root in seen_alb_dirs:
+                    continue
+                seen_alb_dirs.add(root)
+
+                year_found = int(m.group(1))
+                alb_title = m.group(2).strip()
+
+                # Verificar si contiene al menos 1 pista de audio válida
+                has_audio = False
+                for r, _, f_list in os.walk(root):
+                    if any(os.path.splitext(f.lower())[1] in AUDIO_EXTENSIONS for f in f_list):
+                        has_audio = True
+                        break
+
+                if not has_audio:
+                    # Álbum incompleto (solo carátula o 0 archivos de audio)
+                    all_sub_files = [f for _, _, sf in os.walk(root) for f in sf]
+                    if not all_sub_files:
+                        reason = "CARPETA_VACIA"
+                    elif any('cover' in f.lower() or 'folder' in f.lower() for f in all_sub_files):
+                        reason = "SOLO_PORTADA"
                     else:
-                        known_albums.add(d.lower().strip())
-                        known_clean_albums.add(clean_album_base(d))
-                        for y in re.findall(r'\b(19\d\d|20\d\d)\b', d):
-                            yi = int(y)
-                            if 1950 <= yi <= current_year + 1 and yi > max_year:
-                                max_year = yi
+                        reason = "SIN_AUDIO"
+
+                    inc_info = {
+                        "folder_name": folder_name,
+                        "path": root,
+                        "year": str(year_found),
+                        "title": alb_title,
+                        "artist": clean_artist_name,
+                        "genre": genre,
+                        "reason": reason,
+                        "files": all_sub_files[:3]
+                    }
+                    incomplete_albums.append(inc_info)
+                    total_incomplete.append(inc_info)
+                    continue
+
+                if 1950 <= year_found <= current_year + 1 and year_found > max_year:
+                    max_year = year_found
+                
+                known_albums.add(alb_title.lower())
+                known_clean_albums.add(clean_album_base(alb_title))
                                 
             # 3. Fallback: tags de archivos FLAC si aún no tiene año
             if max_year == 0:
@@ -358,10 +398,6 @@ def scan_local_library():
                     if max_year >= 2020:
                         break
 
-            # Limpiar nombre de artista para consultas
-            clean_artist_name = re.sub(r'\s*\(\d{4}\).*$', '', artist).strip()
-            clean_artist_name = re.sub(r'\s*-\s*\d{4}.*$', '', clean_artist_name).strip()
-            
             key = normalize_str(clean_artist_name)
             artists[key] = {
                 "raw_name": artist,
@@ -370,11 +406,14 @@ def scan_local_library():
                 "path": artist_path,
                 "known_albums": list(known_albums),
                 "known_clean_albums": list(known_clean_albums),
+                "incomplete_albums": incomplete_albums,
                 "max_year": max_year if max_year > 0 else 2018
             }
             
     print(f"[+] {len(artists)} artistas identificados e indexados.")
-    return artists
+    if total_incomplete:
+        print(f"[!] DETECTADOS: {len(total_incomplete)} álbum(es) incompletos (solo portada o 0 pistas de audio).")
+    return artists, total_incomplete
 
 # =============================================================================
 # CONSULTA CON ANCLAJE DE DISCOGRAFÍA (CERO FALSOS POSITIVOS)
@@ -457,6 +496,35 @@ def get_album_details(deezer_album_id):
             return cover_url, tracks, genres
     except Exception:
         return None, [], []
+
+def resolve_album_deezer_id(artist_name, album_title):
+    r"""Resuelve el ID de álbum en Deezer buscando por artista y título."""
+    try:
+        q = f'artist:"{artist_name}" album:"{album_title}"'
+        url = f"https://api.deezer.com/search/album?q={urllib.parse.quote(q)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("data", [])
+            if items:
+                return items[0].get("id"), items[0].get("title")
+
+        # Búsqueda más amplia
+        q2 = f"{artist_name} {album_title}"
+        url2 = f"https://api.deezer.com/search/album?q={urllib.parse.quote(q2)}"
+        req2 = urllib.request.Request(url2, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req2, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("data", [])
+            if items:
+                clean_target = clean_album_base(album_title)
+                for item in items:
+                    if clean_album_base(item.get("title", "")) == clean_target:
+                        return item.get("id"), item.get("title")
+                return items[0].get("id"), items[0].get("title")
+    except Exception:
+        pass
+    return None, None
 
 # =============================================================================
 # DESCARGA PISTA POR PISTA (MÁXIMA CALIDAD / LOSSLESS MÍNIMO)
@@ -605,7 +673,7 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
     time.sleep(1.0)
     return True, q_label
 
-def download_album(artist_name, genre, album_title, release_year, deezer_id=None):
+def download_album(artist_name, genre, album_title, release_year, deezer_id=None, target_dir=None):
     r"""
     Descarga un álbum completo en máxima calidad / lossless:
     1. Descarga la carátula oficial en alta resolución (1000x1000 cover.jpg).
@@ -614,15 +682,23 @@ def download_album(artist_name, genre, album_title, release_year, deezer_id=None
     4. Lo organiza en D:\MUSICA\<Género>\<Artista>\[<Año>] <Álbum>\.
     """
     clean_title = sanitize_filename(album_title)
-    target_folder_name = f"[{release_year}] {clean_title}"
-    target_dir = os.path.join(ROOT_DIR, genre, artist_name, target_folder_name)
+    if not target_dir:
+        target_folder_name = f"[{release_year}] {clean_title}"
+        target_dir = os.path.join(ROOT_DIR, genre, artist_name, target_folder_name)
+    else:
+        target_folder_name = os.path.basename(target_dir)
     
     print(f"\n===============================================================================")
-    print(f">>> DESCARGANDO ÁLBUM (MÁXIMA CALIDAD / LOSSLESS): {artist_name} - {target_folder_name}")
+    print(f">>> DESCARGANDO / REPARANDO ÁLBUM: {artist_name} - {target_folder_name}")
     print(f"    Destino: {target_dir}")
     print(f"===============================================================================")
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(STAGING_DIR, exist_ok=True)
+
+    if not deezer_id:
+        deezer_id, resolved_name = resolve_album_deezer_id(artist_name, album_title)
+        if deezer_id:
+            print(f"[*] Resuelto en Deezer API: {resolved_name} (ID: {deezer_id})")
     
     cover_url, tracks, genres = get_album_details(deezer_id) if deezer_id else (None, [], [])
     
@@ -700,6 +776,55 @@ def download_album(artist_name, genre, album_title, release_year, deezer_id=None
                 
     log_event(f"NUEVO ÁLBUM INCORPORADO: {artist_name} - [{release_year}] {clean_title} ({genre})")
     return True
+
+
+def repair_incomplete_albums(incomplete_list, limit=None, specific_artist=None):
+    r"""
+    Toma la lista de álbumes incompletos (solo portada o 0 canciones) y descarga
+    todas las pistas faltantes en calidad Hi-Res / Lossless FLAC con verificación ffmpeg 0 errores.
+    """
+    if specific_artist:
+        norm_spec = normalize_str(specific_artist)
+        incomplete_list = [a for a in incomplete_list if normalize_str(a["artist"]) == norm_spec]
+
+    if not incomplete_list:
+        print("[+] No hay álbumes incompletos que procesar.")
+        return 0
+
+    total_count = len(incomplete_list)
+    to_process = incomplete_list[:limit] if limit and limit > 0 else incomplete_list
+
+    print("\n" + "=" * 80)
+    print(f"   REPARACIÓN DE ÁLBUMES INCOMPLETOS: {len(to_process)} de {total_count} seleccionados")
+    print("   Prioridad 1: ⭐ Hi-Res 24-bit | Prioridad 2: 💿 Lossless FLAC 16-bit")
+    print("   Auditoría Acústica ffmpeg (0 Errores) + Carátulas 1000x1000")
+    print("=" * 80)
+
+    repaired = 0
+    for idx, inc in enumerate(to_process, 1):
+        artist = inc["artist"]
+        genre = inc["genre"]
+        title = inc["title"]
+        year = inc["year"]
+        path = inc["path"]
+
+        print(f"\n[{idx}/{len(to_process)}] PROCESANDO: [{genre}] {artist} - [{year}] {title}")
+        print(f"    Directorio: {path}")
+
+        deezer_id, res_title = resolve_album_deezer_id(artist, title)
+        if deezer_id:
+            print(f"    [+] Resuelto en Deezer: '{res_title}' (ID: {deezer_id})")
+        else:
+            print(f"    [!] Deezer ID no encontrado directo. Se aplicará búsqueda escalonada.")
+
+        ok = download_album(artist, genre, title, year, deezer_id=deezer_id, target_dir=path)
+        if ok:
+            repaired += 1
+
+    print("\n" + "=" * 80)
+    print(f"REPARACIÓN FINALIZADA: {repaired}/{len(to_process)} álbum(es) completados.")
+    print("=" * 80)
+    return repaired
 
 # =============================================================================
 # MONITOR Y DETECTOR DE LANZAMIENTOS PARALELO
@@ -826,17 +951,68 @@ def main():
  * Prioridad 2: MÍNIMO LOSSLESS (FLAC 16-bit / 44.1 kHz, calidad CD).
  * Rechazo absoluto de pistas corruptas, truncadas o lossy.
  * Anclaje de discografía inteligente (Cero homónimos erróneos).
+ * Detección y reparación de álbumes incompletos (solo portada o 0 audio).
  * Sin procesos ni servicios residentes en segundo plano.
 ========================================================================
 """)
-    artists = scan_local_library()
-    
+    args = sys.argv[1:]
+    is_repair_mode = any(a in ("--reparar-incompletos", "--reparar", "-r") for a in args)
+    is_audit_mode = any(a in ("--auditar", "--audit", "-a") for a in args)
+
+    limit = None
+    for idx, arg in enumerate(args):
+        if arg in ("--limite", "--limit", "-l") and idx + 1 < len(args):
+            try:
+                limit = int(args[idx + 1])
+            except ValueError:
+                pass
+
     specific = None
-    for arg in sys.argv[1:]:
-        if not arg.startswith("--"):
+    for idx, arg in enumerate(args):
+        if arg in ("--artista", "--artist") and idx + 1 < len(args):
+            specific = args[idx + 1]
+            break
+        elif not arg.startswith("--") and (idx == 0 or not args[idx - 1].startswith("--")):
             specific = arg
             break
-            
+
+    artists, incomplete_albums = scan_local_library()
+
+    # Guardar reporte de auditoría si se detectaron incompletos
+    if incomplete_albums:
+        try:
+            from core.auditor import save_audit_report
+            audit_summary = {
+                "timestamp": datetime.now().isoformat(),
+                "total_artists": len(artists),
+                "complete_albums_count": sum(len(a["known_albums"]) for a in artists.values()),
+                "incomplete_albums": incomplete_albums,
+                "partial_albums": []
+            }
+            report_file = os.path.join(ROOT_DIR, "_ALBUMES_INCOMPLETOS_DETECTADOS.txt")
+            save_audit_report(audit_summary, report_path=report_file)
+        except Exception as e:
+            print(f"[!] Aviso al generar reporte de incompletos: {e}")
+
+    if is_audit_mode:
+        print("\n" + "=" * 80)
+        print("   MODO AUDITORÍA DE BIBLIOTECA")
+        print(f"   Artistas indexados: {len(artists)}")
+        print(f"   Álbumes incompletos detectados: {len(incomplete_albums)}")
+        print(f"   Reporte detallado guardado en: _ALBUMES_INCOMPLETOS_DETECTADOS.txt")
+        print("=" * 80)
+        return
+
+    if is_repair_mode:
+        repair_incomplete_albums(incomplete_albums, limit=limit, specific_artist=specific)
+        return
+
+    if incomplete_albums:
+        print(f"\n[!] AVISO DE BIBLIOTECA: Se detectaron {len(incomplete_albums)} álbum(es) incompletos (solo portada o 0 canciones).")
+        print(f"    -> Para descargarlos y completarlos automáticamente ejecuta: REPARAR_INCOMPLETOS.bat")
+        print(f"    -> O bien: python actualizar_biblioteca.py --reparar-incompletos")
+        print(f"    -> Reporte completo en: _ALBUMES_INCOMPLETOS_DETECTADOS.txt\n")
+
     check_and_update(artists, auto_download=True, specific_artist=specific)
 
 if __name__ == "__main__":

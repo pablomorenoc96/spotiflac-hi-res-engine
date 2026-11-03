@@ -406,19 +406,55 @@ async function scanLibrary() {
 // 10. Run Full Integrity Audit
 async function runIntegrityAudit() {
   switchTab('audit');
-  appendAuditLog('[INFO] Iniciando auditoría acústica profunda con ffmpeg y ffprobe...', 'info');
+  appendAuditLog('[INFO] Iniciando auditoría exhaustiva en D:\\MUSICA...', 'info');
 
   try {
     if (window.pywebview && window.pywebview.api) {
       const res = await window.pywebview.api.run_audit();
       if (res && res.success) {
-        appendAuditLog(`[SUCCESS] Auditoría completada. Total analizados: ${res.total_checked}. 0 errores acústicos.`, 'success');
+        appendAuditLog(`[SUCCESS] Auditoría completada: ${res.total_artists} artistas, ${res.total_albums} álbumes indexados.`, 'success');
+        appendAuditLog(`[OK] Álbumes con audio verificado: ${res.complete_albums}.`, 'success');
+        if (res.incomplete_count > 0) {
+          appendAuditLog(`[ALERTA] Detectados ${res.incomplete_count} álbumes incompletos (solo portada o 0 canciones).`, 'error');
+          appendAuditLog(`[ACCION] Haz clic en 'Reparar Lote' o 'Reparar Todos' para descargarlos automáticamente.`, 'info');
+          if (res.sample_incompletes && res.sample_incompletes.length > 0) {
+            res.sample_incompletes.slice(0, 8).forEach(a => {
+              appendAuditLog(`   -> [${a.genre}] ${a.artist} - [${a.year}] ${a.title} (${a.reason})`, 'error');
+            });
+            if (res.sample_incompletes.length > 8) {
+              appendAuditLog(`   ... y ${res.incomplete_count - 8} álbumes más en _ALBUMES_INCOMPLETOS_DETECTADOS.txt`, 'info');
+            }
+          }
+        } else {
+          appendAuditLog(`[PERFECTO] Todos los álbumes en disco cuentan con pistas de audio válidas.`, 'success');
+        }
       } else {
         appendAuditLog(`[ERROR] Error en auditoría: ${res ? res.error : ''}`, 'error');
       }
     }
   } catch (e) {
     appendAuditLog(`[ERROR] Fallo en auditoría: ${e}`, 'error');
+  }
+}
+
+// 10b. Run Repair on Incomplete Albums
+async function repairIncomplete(limit = 10) {
+  switchTab('audit');
+  const limText = limit > 0 ? `lote de ${limit} álbumes` : 'todos los álbumes incompletos';
+  appendAuditLog(`[INFO] Solicitando reparación de ${limText}...`, 'info');
+
+  try {
+    if (window.pywebview && window.pywebview.api) {
+      const res = await window.pywebview.api.repair_incomplete_albums(limit);
+      if (res && res.success) {
+        appendAuditLog(`[SUCCESS] ${res.message}`, 'success');
+        appendAuditLog(`[INFO] Las canciones faltantes se descargarán directamente en sus carpetas oficiales.`, 'info');
+      } else {
+        appendAuditLog(`[ERROR] Error al iniciar reparación: ${res ? res.error : ''}`, 'error');
+      }
+    }
+  } catch (e) {
+    appendAuditLog(`[ERROR] Fallo al reparar: ${e}`, 'error');
   }
 }
 

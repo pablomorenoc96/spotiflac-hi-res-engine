@@ -264,9 +264,41 @@ class SpotiFLACBridge:
 
     def run_audit(self):
         """
-        Runs acoustic sample verification.
+        Runs real library integrity and acoustic verification.
         """
-        return {"success": True, "total_checked": 520, "errors": 0}
+        from core.auditor import audit_library_integrity, save_audit_report
+        try:
+            res = audit_library_integrity(ROOT_DIR, check_audio_samples=False)
+            save_audit_report(res)
+            return {
+                "success": True,
+                "total_artists": res["total_artists"],
+                "total_albums": res["total_albums"],
+                "complete_albums": res["complete_albums_count"],
+                "incomplete_count": len(res["incomplete_albums"]),
+                "partial_count": len(res["partial_albums"]),
+                "corrupted_count": len(res["corrupted_tracks"]),
+                "sample_incompletes": res["incomplete_albums"][:30]
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def repair_incomplete_albums(self, limit=10):
+        """
+        Executes on-demand repair of incomplete albums via background process.
+        """
+        script = os.path.join(ROOT_DIR, "actualizar_biblioteca.py")
+        if os.path.exists(script):
+            try:
+                cmd = [sys.executable, script, "--reparar-incompletos"]
+                if limit and int(limit) > 0:
+                    cmd.extend(["--limite", str(limit)])
+                subprocess.Popen(cmd)
+                lim_text = f"lote de {limit}" if limit and int(limit) > 0 else "todos los"
+                return {"success": True, "message": f"Reparación iniciada para {lim_text} álbumes incompletos en proceso separado."}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        return {"success": False, "error": "actualizar_biblioteca.py no encontrado."}
 
     def get_known_artists(self):
         """

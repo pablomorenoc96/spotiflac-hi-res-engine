@@ -224,14 +224,22 @@
 
     <!-- Tab 3: Auditoría & Reparación -->
     <section id="tab-audit" class="tab-content">
-      <div class="banner-action-box">
-        <div class="banner-text">
+      <div class="banner-action-box" style="flex-wrap: wrap; gap: 16px;">
+        <div class="banner-text" style="flex: 1; min-width: 280px;">
           <h3>Auditoría Acústica & Reparación de Integridad</h3>
-          <p>Comprueba cada archivo con decodificación completa ffmpeg y aplana cualquier carpeta duplicada.</p>
+          <p>Detecta álbumes con solo carátula o sin audio, y descarga automáticamente sus pistas faltantes a máxima fidelidad (Hi-Res / FLAC Lossless).</p>
         </div>
-        <button class="btn-gradient" onclick="runIntegrityAudit()">
-          🛡️ Ejecutar Auditoría Completa
-        </button>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn-gradient" onclick="runIntegrityAudit()">
+            🛡️ Ejecutar Auditoría
+          </button>
+          <button class="btn-gradient" onclick="repairIncomplete(10)" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+            🔧 Reparar Lote (10 Álbumes)
+          </button>
+          <button class="btn-gradient" onclick="repairIncomplete(0)" style="background: linear-gradient(135deg, #10b981, #059669);">
+            ⚡ Reparar Todos
+          </button>
+        </div>
       </div>
 
       <div class="tracks-section-header">
@@ -239,7 +247,6 @@
       </div>
       <div id="auditLogBox" class="log-box">
         <div class="log-line-info">[INFO] Sistema listo para auditar. Cero procesos en segundo plano.</div>
-        <div class="log-line-success">[SUCCESS] 520 pistas pasaron la prueba acústica con 0 errores.</div>
       </div>
     </section>
 
