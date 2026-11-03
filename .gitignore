@@ -67,6 +67,8 @@ ENLACES_ALBUMES_PARA_DESCARGAR.txt
 _CATALOGO_GENEROS_Y_BANDAS.txt
 completar_electric_wizard.py
 descargar_reparar_cuarentena.py
+cookies.txt
+yt-dlp.conf
 
 # Foobar2000 Backups
 _FOOBAR_BACKUP_*/

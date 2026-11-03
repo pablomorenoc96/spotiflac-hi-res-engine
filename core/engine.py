@@ -55,7 +55,7 @@ def download_cover(cover_url, dest_path):
         print(f"[!] Cover download error: {e}")
         return False
 
-def download_single_track(artist, album, track_title, track_pos, track_total, year, genre, target_dir, staging_dir=DEFAULT_STAGING):
+def download_single_track(artist, album, track_title, track_pos, track_total, year, genre, target_dir, staging_dir=DEFAULT_STAGING, track_artist=None):
     """
     Downloads one track using atomic staging, Hi-Res prioritization, ffmpeg audit, and mutagen tagging.
     """
@@ -75,14 +75,37 @@ def download_single_track(artist, album, track_title, track_pos, track_total, ye
     staging_file = os.path.join(staging_dir, f"{clean_artist}_{track_pos:02d}.flac")
     out_tmpl = os.path.join(staging_dir, f"{clean_artist}_{track_pos:02d}.%(ext)s")
     if os.path.exists(staging_file):
-        os.remove(staging_file)
+        try:
+            os.remove(staging_file)
+        except Exception:
+            pass
 
-    queries = [
-        f'ytsearch1:"{artist}" "{album}" "{clean_title}"',
-        f'ytsearch1:{artist} - Topic "{clean_title}"',
-        f'ytsearch1:"{artist}" "{clean_title}" (Official Audio)',
-        f'ytsearch1:"{artist}" "{clean_title}"'
-    ]
+    # Normalización de textos para consultas robustas
+    norm_artist = re.sub(r'\s+', ' ', artist).strip()
+    norm_title = re.sub(r'\s+', ' ', track_title).strip()
+    norm_album = re.sub(r'\s+', ' ', album).strip()
+    base_title = re.sub(r'[\(\[].*?[\)\]]', '', norm_title).strip()
+    search_artist = norm_artist.replace("+", " ")
+
+    queries = []
+    if track_artist and track_artist.lower() != artist.lower():
+        norm_t_artist = re.sub(r'\s+', ' ', track_artist).strip().replace("+", " ")
+        queries.append(f'ytsearch1:"{norm_t_artist}" "{norm_title}"')
+        queries.append(f"ytsearch1:{norm_t_artist} {norm_title}")
+        if base_title and base_title != norm_title:
+            queries.append(f"ytsearch1:{norm_t_artist} {base_title}")
+
+    queries.extend([
+        f'ytsearch1:"{norm_artist}" "{norm_album}" "{norm_title}"',
+        f'ytsearch1:"{norm_artist}" "{norm_title}"',
+        f"ytsearch1:{search_artist} {norm_title} (Official Audio)",
+        f'ytsearch1:{search_artist} - Topic "{norm_title}"',
+        f"ytsearch1:{search_artist} {norm_album} {norm_title}",
+        f"ytsearch1:{search_artist} {norm_title}"
+    ])
+
+    if base_title and base_title != norm_title:
+        queries.append(f"ytsearch1:{search_artist} {base_title}")
 
     for q in queries:
         cmd = [
@@ -100,11 +123,17 @@ def download_single_track(artist, album, track_title, track_pos, track_total, ye
         if os.path.exists(staging_file) and os.path.getsize(staging_file) > 10000:
             valid, label, bits, sr = inspect_audio(staging_file)
             if valid:
-                apply_vorbis_tags(staging_file, artist, album, clean_title, track_pos, track_total, year, genre)
+                tag_artist = track_artist if track_artist else artist
+                apply_vorbis_tags(staging_file, tag_artist, album, clean_title, track_pos, track_total, year, genre)
                 shutil.move(staging_file, final_path)
+                time.sleep(1.0)
                 return True, label
             else:
                 if os.path.exists(staging_file):
-                    os.remove(staging_file)
+                    try:
+                        os.remove(staging_file)
+                    except Exception:
+                        pass
+        time.sleep(0.5)
 
     return False, "FAILED"

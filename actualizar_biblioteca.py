@@ -430,7 +430,7 @@ def get_album_details(deezer_album_id):
 # DESCARGA PISTA POR PISTA (MÁXIMA CALIDAD / LOSSLESS MÍNIMO)
 # =============================================================================
 
-def download_track(artist_name, genre, album_title, track_title, track_pos, track_total, release_year, target_dir):
+def download_track(artist_name, genre, album_title, track_title, track_pos, track_total, release_year, target_dir, track_artist=None):
     r"""
     Descarga una pista individual priorizando MÁXIMA CALIDAD (Hi-Res / 24-bit),
     con fallback automático a MÍNIMO LOSSLESS (FLAC 16-bit / 44.1 kHz).
@@ -452,15 +452,38 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
     out_tmpl = os.path.join(STAGING_DIR, f"track_{clean_artist}_{track_pos:02d}.%(ext)s")
     
     if os.path.exists(staging_file):
-        os.remove(staging_file)
+        try:
+            os.remove(staging_file)
+        except Exception:
+            pass
         
-    # Estrategia de búsqueda escalonada (Prioriza Audio Oficial de Estudio / Topic)
-    queries = [
-        f"ytsearch1:{artist_name} - {clean_title} (Official Audio)",
-        f"ytsearch1:{artist_name} {clean_title}",
-        f"ytsearch1:{artist_name} {album_title} {clean_title}"
-    ]
-    
+    # Normalización de textos para búsquedas de alta precisión
+    norm_artist = re.sub(r'\s+', ' ', artist_name).strip()
+    norm_title = re.sub(r'\s+', ' ', track_title).strip()
+    norm_album = re.sub(r'\s+', ' ', album_title).strip()
+    base_title = re.sub(r'[\(\[].*?[\)\]]', '', norm_title).strip()
+    search_artist = norm_artist.replace("+", " ")
+
+    # Estrategia de búsqueda escalonada y resiliente
+    queries = []
+    if track_artist and track_artist.lower() != artist_name.lower():
+        norm_t_artist = re.sub(r'\s+', ' ', track_artist).strip().replace("+", " ")
+        queries.append(f'ytsearch1:"{norm_t_artist}" "{norm_title}"')
+        queries.append(f"ytsearch1:{norm_t_artist} {norm_title}")
+        if base_title and base_title != norm_title:
+            queries.append(f"ytsearch1:{norm_t_artist} {base_title}")
+
+    queries.extend([
+        f'ytsearch1:"{norm_artist}" "{norm_title}"',
+        f"ytsearch1:{search_artist} {norm_title} (Official Audio)",
+        f"ytsearch1:{search_artist} - Topic {norm_title}",
+        f"ytsearch1:{search_artist} {norm_album} {norm_title}",
+        f"ytsearch1:{search_artist} {norm_title}"
+    ])
+
+    if base_title and base_title != norm_title:
+        queries.append(f"ytsearch1:{search_artist} {base_title}")
+
     downloaded = False
     for q in queries:
         cmd = [
@@ -474,10 +497,12 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
             "-o", out_tmpl,
             q
         ]
-        subprocess.run(cmd, capture_output=True, text=True)
+        res = subprocess.run(cmd, capture_output=True, text=True)
         if os.path.exists(staging_file) and os.path.getsize(staging_file) > 100000:
             downloaded = True
             break
+        # Breve pausa para no saturar conexiones
+        time.sleep(0.5)
             
     if not downloaded:
         print(f"  [X] No se pudo obtener la pista: {out_filename}")
@@ -494,7 +519,7 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
     # Inyección de metadatos Vorbis completos
     try:
         f = FLAC(staging_file)
-        f["artist"] = [artist_name]
+        f["artist"] = [track_artist if track_artist else artist_name]
         f["albumartist"] = [artist_name]
         f["album"] = [album_title]
         f["title"] = [track_title]
@@ -509,6 +534,8 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
     shutil.move(staging_file, final_path)
     tag_badge = "⭐ [HI-RES]" if is_hires else "💿 [LOSSLESS]"
     print(f"  [OK] Pista {track_pos:02d}/{track_total}: {clean_title} | {tag_badge} {q_label}")
+    # Pausa de cortesía para ritmo constante sin disparar bot checks
+    time.sleep(1.0)
     return True, q_label
 
 def download_album(artist_name, genre, album_title, release_year, deezer_id=None):
@@ -552,7 +579,8 @@ def download_album(artist_name, genre, album_title, release_year, deezer_id=None
         hires_count = 0
         for pos, t in enumerate(tracks, 1):
             t_title = t.get("title", f"Track {pos}")
-            ok, q_lbl = download_track(artist_name, genre, clean_title, t_title, pos, total_tracks, release_year, target_dir)
+            t_artist = t.get("artist", {}).get("name")
+            ok, q_lbl = download_track(artist_name, genre, clean_title, t_title, pos, total_tracks, release_year, target_dir, track_artist=t_artist)
             if ok:
                 success_tracks += 1
                 if "Hi-Res" in q_lbl:

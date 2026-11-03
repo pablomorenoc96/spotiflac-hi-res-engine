@@ -291,10 +291,11 @@ def download_full_discography(artist_query):
         for t_idx, t in enumerate(tracks, 1):
             pos = t.get("track_position", t_idx)
             t_title = t.get("title", f"Pista {t_idx}")
+            t_artist = t.get("artist", {}).get("name")
             print(f"  -> [{pos:02d}/{total_tracks:02d}] {t_title}...", end="", flush=True)
 
             success, label = download_single_track(
-                artist_name, album_title, t_title, pos, total_tracks, year, genre, target_dir
+                artist_name, album_title, t_title, pos, total_tracks, year, genre, target_dir, track_artist=t_artist
             )
 
             if success:

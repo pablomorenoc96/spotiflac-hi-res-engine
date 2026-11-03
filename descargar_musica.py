@@ -71,8 +71,9 @@ def main():
     hires = 0
     for pos, t in enumerate(tracks, 1):
         t_title = t.get("title", f"Track {pos}")
+        t_artist = t.get("artist", {}).get("name")
         print(f"[{pos:02d}/{total_tracks:02d}] Procesando: {t_title}...")
-        ok, label = download_single_track(artist, album, t_title, pos, total_tracks, year, genre, target_dir)
+        ok, label = download_single_track(artist, album, t_title, pos, total_tracks, year, genre, target_dir, track_artist=t_artist)
         if ok:
             success += 1
             if "Hi-Res" in label:
