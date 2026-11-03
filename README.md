@@ -21,8 +21,10 @@
   * Seamless integration with Node.js EJS solver (`--remote-components ejs:github`) and browser session authentication to prevent *"Sign in to confirm you're not a bot"* rate blocks.
 * **Per-Track Performer & Collaborative Search**:
   * Resolves per-track guest and collaborative artists on split or multi-artist albums to guarantee 100% track retrieval rates.
-* **Acoustic Integrity Gate**:
+* **Acoustic Integrity Gate & Automated Repair**:
   * Every audio file is audited on-the-fly with an end-to-end decode pass using `ffmpeg -v error -i <file> -f null -`. Files with even 1 byte of corruption are discarded and re-downloaded from alternate streams.
+  * **Incomplete Album & Sequence Gap Detection**: Automatically detects albums with missing audio files, ghost cover-only folders (`cover.jpg` with 0 songs), numbering sequence gaps (e.g. tracks 1, 3, 4 present, 2 missing), and truncated/aborted downloads (`.part`, `.ytdl`, or truncated FLACs).
+  * **Surgical Auto-Repair Engine**: Resolves metadata and downloads exclusively the missing songs directly into the album's folder, verifying existing audio files in milliseconds without re-downloading what is already intact.
 * **Modern Desktop GUI (PyWebView & Edge WebView2)**:
   * Glassmorphism dark theme inspired by Spotify and SpotiFLAC.
   * Interactive Discography Explorer with smart local library diffing and checkbox multi-selection.
@@ -126,6 +128,23 @@ python actualizar_biblioteca.py
 ```
 Scans all cataloged artist folders in parallel, discovers official new studio releases, downloads them in Hi-Res/Lossless FLAC, and logs updates.
 
+### 6. Incomplete Album & Track Gap Repair (1-Click)
+Double-click `REPARAR_INCOMPLETOS.bat` or run:
+```bash
+# Repair batch of 10 incomplete albums
+python actualizar_biblioteca.py --reparar-incompletos --limite 10
+
+# Repair all incomplete albums across the entire vault
+python actualizar_biblioteca.py --reparar-incompletos
+
+# Repair a specific artist
+python actualizar_biblioteca.py --reparar-incompletos --artista "Accept"
+
+# Audit only and generate _ALBUMES_INCOMPLETOS_DETECTADOS.txt
+python actualizar_biblioteca.py --auditar
+```
+Detects ghost albums with only `cover.jpg`, sequence gaps (e.g. tracks 1, 3 present, 2 missing), and truncated downloads, and downloads only the missing tracks directly into their official library folders.
+
 ---
 
 ## 📁 Repository Structure
@@ -133,7 +152,7 @@ Scans all cataloged artist folders in parallel, discovers official new studio re
 ```
 .
 ├── core/
-│   ├── auditor.py              # Acoustic verification & mutagen Vorbis tagging
+│   ├── auditor.py              # Acoustic verification, integrity audit & Vorbis tagging
 │   └── engine.py               # Multi-source failover downloader & staging manager
 ├── data/
 │   └── known_artists.json      # Disambiguation catalog for homonyms
@@ -146,9 +165,11 @@ Scans all cataloged artist folders in parallel, discovers official new studio re
 ├── DESCARGAR_DISCOGRAFIA.bat   # 1-click full discography downloader
 ├── descargar_discografia.py    # Complete discography downloader script
 ├── ACTUALIZAR_BIBLIOTECA.bat   # 1-click batch library updater
-├── actualizar_biblioteca.py    # Library updater script
+├── actualizar_biblioteca.py    # Library updater & incomplete repair script
+├── REPARAR_INCOMPLETOS.bat     # 1-click incomplete albums & track gap repair
 ├── DESCARGAR_MUSICA.bat        # 1-click interactive CLI downloader
 ├── descargar_musica.py         # Interactive CLI downloader script
+├── _ALBUMES_INCOMPLETOS_DETECTADOS.txt # Live audit report of incomplete releases
 ├── requirements.txt            # Python dependencies
 ├── .gitignore                  # Audio, images, cache & local exclusion rules
 └── LICENSE                     # MIT License
