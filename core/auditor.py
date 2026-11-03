@@ -97,6 +97,9 @@ def apply_vorbis_tags(filepath, artist, album, title, track_pos, track_total, ye
         if audio_fidelity:
             f["AUDIO_FIDELITY"] = [str(audio_fidelity)]
         f.save()
+        del f
+        import gc
+        gc.collect()
         return True
     except Exception as e:
         print(f"[!] Warning applying tags to {filepath}: {e}")

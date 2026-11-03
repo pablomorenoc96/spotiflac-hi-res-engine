@@ -49,6 +49,37 @@ INBOX_DIRS = [
 ]
 LOG_FILE = os.path.join(ROOT_DIR, "HISTORIAL_ACTUALIZACIONES.txt")
 
+def safe_move(src, dst, max_retries=5, delay=0.3):
+    r"""
+    Mueve un archivo en Windows de forma atómica y segura,
+    manejando colisiones de archivos existentes (WinError 183) y
+    bloqueos temporales de procesos o antivirus (WinError 32).
+    """
+    import gc
+    gc.collect()
+    for attempt in range(max_retries):
+        try:
+            if os.path.exists(dst):
+                try:
+                    os.remove(dst)
+                except Exception:
+                    pass
+            os.replace(src, dst)
+            return True
+        except (PermissionError, OSError):
+            time.sleep(delay)
+            gc.collect()
+    try:
+        shutil.copy2(src, dst)
+        try:
+            os.remove(src)
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        print(f"[!] Error safe_move de {src} a {dst}: {e}")
+        return False
+
 IGNORED_FOLDERS = {
     "_entrada_descargas",
     "_cuarentena_incompletas",
@@ -271,7 +302,7 @@ def process_inbox(artists_map):
                 os.makedirs(dest_dir, exist_ok=True)
                 
                 dest_file = os.path.join(dest_dir, os.path.basename(flac_path))
-                shutil.move(flac_path, dest_file)
+                safe_move(flac_path, dest_file)
                 processed_count += 1
                 hires_tag = "⭐ [HI-RES]" if is_hires else "💿 [LOSSLESS]"
                 print(f"  [+] {hires_tag} Incorporado: {clean_art} - {os.path.basename(dest_file)} ({q_label})")
@@ -340,26 +371,15 @@ def scan_local_library():
                 year_found = int(m.group(1))
                 alb_title = m.group(2).strip()
 
-                # Verificar si contiene al menos 1 pista de audio válida y detectar pistas truncadas
-                audio_files = []
-                truncated_files = []
-                for r, _, f_list in os.walk(root):
-                    for f in f_list:
-                        ext = os.path.splitext(f.lower())[1]
-                        if ext in AUDIO_EXTENSIONS:
-                            fp = os.path.join(r, f)
-                            sz = os.path.getsize(fp) if os.path.exists(fp) else 0
-                            if sz < 100000:
-                                truncated_files.append(f)
-                            else:
-                                audio_files.append(f)
+                # Verificar si contiene archivos de audio y detectar temporales incompletos
+                audio_files = [f for f in files if os.path.splitext(f.lower())[1] in AUDIO_EXTENSIONS]
+                truncated_files = [f for f in files if os.path.splitext(f.lower())[1] in {'.part', '.ytdl', '.tmp'}]
 
                 if not audio_files:
                     # Álbum incompleto (solo carátula o 0 archivos de audio)
-                    all_sub_files = [f for _, _, sf in os.walk(root) for f in sf]
-                    if not all_sub_files:
+                    if not files:
                         reason = "CARPETA_VACIA"
-                    elif any('cover' in f.lower() or 'folder' in f.lower() for f in all_sub_files):
+                    elif any('cover' in f.lower() or 'folder' in f.lower() for f in files):
                         reason = "SOLO_PORTADA"
                     else:
                         reason = "SIN_AUDIO"
@@ -372,7 +392,7 @@ def scan_local_library():
                         "artist": clean_artist_name,
                         "genre": genre,
                         "reason": reason,
-                        "files": all_sub_files[:3],
+                        "files": files[:3],
                         "missing_tracks": []
                     }
                     incomplete_albums.append(inc_info)
@@ -419,25 +439,15 @@ def scan_local_library():
                 known_albums.add(alb_title.lower())
                 known_clean_albums.add(clean_album_base(alb_title))
                                 
-            # 3. Fallback: tags de archivos FLAC si aún no tiene año
+            # 3. Fallback: año en nombres de archivo si aún no tiene año
             if max_year == 0:
                 for root, _, files in os.walk(artist_path):
                     for f in files:
-                        if f.lower().endswith('.flac'):
-                            try:
-                                audio = FLAC(os.path.join(root, f))
-                                d = audio.get('date', [None])[0] or audio.get('year', [None])[0]
-                                if d:
-                                    m = re.search(r'\b(19\d\d|20\d\d)\b', str(d))
-                                    if m:
-                                        yi = int(m.group(1))
-                                        if 1950 <= yi <= current_year + 1 and yi > max_year:
-                                            max_year = yi
-                            except Exception:
-                                pass
-                            if max_year >= 2020:
-                                break
-                    if max_year >= 2020:
+                        for y in re.findall(r'\b(19\d\d|20\d\d)\b', f):
+                            yi = int(y)
+                            if 1950 <= yi <= current_year + 1 and yi > max_year:
+                                max_year = yi
+                    if max_year > 0:
                         break
 
             key = normalize_str(clean_artist_name)
@@ -641,7 +651,7 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
             "-x",
             "--audio-format", "flac",
             "--audio-quality", "0",
-            "--postprocessor-args", "ffmpeg:-compression_level 8",
+            "--postprocessor-args", "ffmpeg:-sample_fmt s16 -compression_level 8",
             "--print", "STREAM_INFO:%(acodec)s|%(abr)s|%(asr)s|%(ext)s",
             "-o", out_tmpl,
             q
@@ -663,27 +673,34 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
     is_native_lossless = stream_codec.lower() in ("flac", "alac", "wav") or stream_ext.lower() == "flac"
 
     # Si el stream original NO era FLAC nativo (ej. Opus o AAC de YouTube),
-    # recodificar limpiamente a 16-bit FLAC para evitar inflación de 24-bit y falsos Hi-Res
+    # y por alguna razón no se convirtió en s16 en el primer paso, recodificar de respaldo
     if not is_native_lossless:
-        temp_16 = staging_file + ".16.flac"
-        recode_cmd = [
-            "ffmpeg", "-y", "-v", "error",
-            "-i", staging_file,
-            "-c:a", "flac",
-            "-sample_fmt", "s16",
-            "-compression_level", "8",
-            temp_16
-        ]
-        subprocess.run(recode_cmd, capture_output=True, text=True)
-        if os.path.exists(temp_16) and os.path.getsize(temp_16) > 10000:
-            shutil.move(temp_16, staging_file)
+        probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "stream=bits_per_raw_sample", "-of", "default=noprint_wrappers=1:nokey=1", staging_file]
+        pr = subprocess.run(probe_cmd, capture_output=True, text=True)
+        bits_raw = pr.stdout.strip()
+        if bits_raw.isdigit() and int(bits_raw) > 16:
+            temp_16 = staging_file + ".16.flac"
+            recode_cmd = [
+                "ffmpeg", "-y", "-v", "error",
+                "-i", staging_file,
+                "-c:a", "flac",
+                "-sample_fmt", "s16",
+                "-compression_level", "8",
+                temp_16
+            ]
+            subprocess.run(recode_cmd, capture_output=True, text=True)
+            if os.path.exists(temp_16) and os.path.getsize(temp_16) > 10000:
+                safe_move(temp_16, staging_file)
 
     # Auditoría estricta de calidad e integridad con fidelidad real
     valid, is_hires, q_label = inspect_and_verify_audio(staging_file, is_native_lossless=is_native_lossless, stream_codec=stream_codec, stream_abr=stream_abr)
     if not valid:
         print(f"  [ERROR] Pista corrupta detectada ({q_label}). Descartada.")
         if os.path.exists(staging_file):
-            os.remove(staging_file)
+            try:
+                os.remove(staging_file)
+            except Exception:
+                pass
         return False, q_label
         
     # Inyección de metadatos Vorbis completos con fidelidad real
@@ -700,10 +717,13 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
         f["SOURCE_CODEC"] = [stream_codec.upper() if stream_codec else "OPUS"]
         f["AUDIO_FIDELITY"] = [q_label]
         f.save()
+        del f
+        import gc
+        gc.collect()
     except Exception as e:
         print(f"  [!] Aviso tags: {e}")
         
-    shutil.move(staging_file, final_path)
+    safe_move(staging_file, final_path)
     if is_hires:
         tag_badge = "⭐ [HI-RES NATIVO]"
     elif is_native_lossless:
@@ -724,11 +744,31 @@ def download_album(artist_name, genre, album_title, release_year, deezer_id=None
     4. Lo organiza en D:\MUSICA\<Género>\<Artista>\[<Año>] <Álbum>\.
     """
     clean_title = sanitize_filename(album_title)
-    if not target_dir:
-        target_folder_name = f"[{release_year}] {clean_title}"
-        target_dir = os.path.join(ROOT_DIR, genre, artist_name, target_folder_name)
-    else:
-        target_folder_name = os.path.basename(target_dir)
+    canonical_folder_name = f"[{release_year}] {clean_title}"
+    canonical_dir = os.path.join(ROOT_DIR, genre, artist_name, canonical_folder_name)
+
+    # Contrato estricto de jerarquia: resolver y desanidar si target_dir venia anidado (Artist\Artist)
+    if target_dir and os.path.normpath(target_dir).lower() != os.path.normpath(canonical_dir).lower():
+        if os.path.exists(target_dir):
+            os.makedirs(canonical_dir, exist_ok=True)
+            for item in os.listdir(target_dir):
+                s_item = os.path.join(target_dir, item)
+                d_item = os.path.join(canonical_dir, item)
+                if not os.path.exists(d_item):
+                    safe_move(s_item, d_item)
+            try:
+                os.rmdir(target_dir)
+                parent_nested = os.path.dirname(target_dir)
+                if os.path.basename(parent_nested).lower() == artist_name.lower():
+                    if os.path.exists(parent_nested) and not os.listdir(parent_nested):
+                        os.rmdir(parent_nested)
+            except Exception:
+                pass
+        target_dir = canonical_dir
+    elif not target_dir:
+        target_dir = canonical_dir
+
+    target_folder_name = os.path.basename(target_dir)
     
     print(f"\n===============================================================================")
     print(f">>> DESCARGANDO / REPARANDO ÁLBUM: {artist_name} - {target_folder_name}")
@@ -812,8 +852,11 @@ def download_album(artist_name, genre, album_title, release_year, deezer_id=None
                 f["date"] = [str(release_year)]
                 f["genre"] = [genre]
                 f.save()
+                del f
+                import gc
+                gc.collect()
                 final_flac = os.path.join(target_dir, f"{artist_name} - {clean_title}.flac")
-                shutil.move(staging_file, final_flac)
+                safe_move(staging_file, final_flac)
                 print(f"[OK] Álbum incorporado: {final_flac} ({q_label})")
                 
     log_event(f"NUEVO ÁLBUM INCORPORADO: {artist_name} - [{release_year}] {clean_title} ({genre})")

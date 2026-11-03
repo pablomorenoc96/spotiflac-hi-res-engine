@@ -14,6 +14,36 @@ DEFAULT_STAGING = os.path.join(ROOT_DIR, "_staging")
 def sanitize_filename(s):
     return re.sub(r'[<>:"/\\|?*]', '', str(s)).strip()
 
+def safe_move(src, dst, max_retries=5, delay=0.3):
+    """
+    Safely moves a file on Windows, handling collisions and lock errors.
+    """
+    import gc
+    import time
+    gc.collect()
+    for attempt in range(max_retries):
+        try:
+            if os.path.exists(dst):
+                try:
+                    os.remove(dst)
+                except Exception:
+                    pass
+            os.replace(src, dst)
+            return True
+        except (PermissionError, OSError):
+            time.sleep(delay)
+            gc.collect()
+    try:
+        shutil.copy2(src, dst)
+        try:
+            os.remove(src)
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        print(f"[!] Error safe_move: {e}")
+        return False
+
 def fetch_deezer_metadata(query_or_id, is_album_id=False):
     """
     Retrieves album metadata, tracks, and 1000x1000 cover_xl from Deezer.
@@ -122,7 +152,7 @@ def download_single_track(artist, album, track_title, track_pos, track_total, ye
             "-x",
             "--audio-format", "flac",
             "--audio-quality", "0",
-            "--postprocessor-args", "ffmpeg:-compression_level 8",
+            "--postprocessor-args", "ffmpeg:-sample_fmt s16 -compression_level 8",
             "--print", "STREAM_INFO:%(acodec)s|%(abr)s|%(asr)s|%(ext)s",
             "-o", out_tmpl,
             q
@@ -139,26 +169,30 @@ def download_single_track(artist, album, track_title, track_pos, track_total, ye
     if downloaded:
         is_native_lossless = stream_codec.lower() in ("flac", "alac", "wav") or stream_ext.lower() == "flac"
         
-        # Si el stream original era lossy (Opus / AAC), recodificar a 16-bit FLAC para evitar inflación de 24-bit
+        # Si el stream original era lossy (Opus / AAC), asegurar que sea 16-bit FLAC
         if not is_native_lossless:
-            temp_16 = staging_file + ".16.flac"
-            recode_cmd = [
-                "ffmpeg", "-y", "-v", "error",
-                "-i", staging_file,
-                "-c:a", "flac",
-                "-sample_fmt", "s16",
-                "-compression_level", "8",
-                temp_16
-            ]
-            subprocess.run(recode_cmd, capture_output=True, text=True)
-            if os.path.exists(temp_16) and os.path.getsize(temp_16) > 10000:
-                shutil.move(temp_16, staging_file)
+            probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "stream=bits_per_raw_sample", "-of", "default=noprint_wrappers=1:nokey=1", staging_file]
+            pr = subprocess.run(probe_cmd, capture_output=True, text=True)
+            bits_raw = pr.stdout.strip()
+            if bits_raw.isdigit() and int(bits_raw) > 16:
+                temp_16 = staging_file + ".16.flac"
+                recode_cmd = [
+                    "ffmpeg", "-y", "-v", "error",
+                    "-i", staging_file,
+                    "-c:a", "flac",
+                    "-sample_fmt", "s16",
+                    "-compression_level", "8",
+                    temp_16
+                ]
+                subprocess.run(recode_cmd, capture_output=True, text=True)
+                if os.path.exists(temp_16) and os.path.getsize(temp_16) > 10000:
+                    safe_move(temp_16, staging_file)
 
         valid, label, bits, sr = inspect_audio(staging_file, is_native_lossless=is_native_lossless, stream_codec=stream_codec, stream_abr=stream_abr)
         if valid:
             tag_artist = track_artist if track_artist else artist
             apply_vorbis_tags(staging_file, tag_artist, album, clean_title, track_pos, track_total, year, genre, source_codec=stream_codec, audio_fidelity=label)
-            shutil.move(staging_file, final_path)
+            safe_move(staging_file, final_path)
             time.sleep(1.0)
             return True, label
         else:
