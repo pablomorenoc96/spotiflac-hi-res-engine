@@ -107,33 +107,65 @@ def download_single_track(artist, album, track_title, track_pos, track_total, ye
     if base_title and base_title != norm_title:
         queries.append(f"ytsearch1:{search_artist} {base_title}")
 
+    downloaded = False
+    stream_codec = "flac"
+    stream_abr = None
+    stream_asr = 48000
+    stream_ext = "webm"
+
     for q in queries:
         cmd = [
             "yt-dlp",
+            "--no-simulate",
             "--no-playlist",
             "-f", "bestaudio[ext=flac]/bestaudio[acodec=flac]/bestaudio/best",
             "-x",
             "--audio-format", "flac",
             "--audio-quality", "0",
             "--postprocessor-args", "ffmpeg:-compression_level 8",
+            "--print", "STREAM_INFO:%(acodec)s|%(abr)s|%(asr)s|%(ext)s",
             "-o", out_tmpl,
             q
         ]
-        subprocess.run(cmd, capture_output=True, text=True)
+        res = subprocess.run(cmd, capture_output=True, text=True)
         if os.path.exists(staging_file) and os.path.getsize(staging_file) > 10000:
-            valid, label, bits, sr = inspect_audio(staging_file)
-            if valid:
-                tag_artist = track_artist if track_artist else artist
-                apply_vorbis_tags(staging_file, tag_artist, album, clean_title, track_pos, track_total, year, genre)
-                shutil.move(staging_file, final_path)
-                time.sleep(1.0)
-                return True, label
-            else:
-                if os.path.exists(staging_file):
-                    try:
-                        os.remove(staging_file)
-                    except Exception:
-                        pass
+            downloaded = True
+            m = re.search(r'STREAM_INFO:([^|\r\n]+)\|([^|\r\n]+)\|([^|\r\n]+)\|([^\r\n]+)', res.stdout)
+            if m:
+                stream_codec, stream_abr, stream_asr, stream_ext = m.groups()
+            break
         time.sleep(0.5)
+
+    if downloaded:
+        is_native_lossless = stream_codec.lower() in ("flac", "alac", "wav") or stream_ext.lower() == "flac"
+        
+        # Si el stream original era lossy (Opus / AAC), recodificar a 16-bit FLAC para evitar inflación de 24-bit
+        if not is_native_lossless:
+            temp_16 = staging_file + ".16.flac"
+            recode_cmd = [
+                "ffmpeg", "-y", "-v", "error",
+                "-i", staging_file,
+                "-c:a", "flac",
+                "-sample_fmt", "s16",
+                "-compression_level", "8",
+                temp_16
+            ]
+            subprocess.run(recode_cmd, capture_output=True, text=True)
+            if os.path.exists(temp_16) and os.path.getsize(temp_16) > 10000:
+                shutil.move(temp_16, staging_file)
+
+        valid, label, bits, sr = inspect_audio(staging_file, is_native_lossless=is_native_lossless, stream_codec=stream_codec, stream_abr=stream_abr)
+        if valid:
+            tag_artist = track_artist if track_artist else artist
+            apply_vorbis_tags(staging_file, tag_artist, album, clean_title, track_pos, track_total, year, genre, source_codec=stream_codec, audio_fidelity=label)
+            shutil.move(staging_file, final_path)
+            time.sleep(1.0)
+            return True, label
+        else:
+            if os.path.exists(staging_file):
+                try:
+                    os.remove(staging_file)
+                except Exception:
+                    pass
 
     return False, "FAILED"

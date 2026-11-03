@@ -175,6 +175,7 @@ class SpotiFLACBridge:
         for idx, t in enumerate(tracks):
             pos = t.get("track_position", idx + 1)
             t_title = t.get("title", "")
+            t_artist = t.get("artist", {}).get("name")
             pct = int((idx / total) * 100)
 
             # Signal downloading
@@ -182,7 +183,7 @@ class SpotiFLACBridge:
                 self._window.evaluate_js(f"window.onTrackProgress({idx}, {total}, 'downloading', '', {pct});")
 
             success, label = download_single_track(
-                artist, album_title, t_title, pos, total, year, genre, target_dir
+                artist, album_title, t_title, pos, total, year, genre, target_dir, track_artist=t_artist
             )
 
             end_pct = int(((idx + 1) / total) * 100)

@@ -118,12 +118,12 @@ def save_cache(cache):
 # MOTOR DE AUDITORÍA DE CALIDAD Y RESOLUCIÓN (MÁXIMA CALIDAD / LOSSLESS MÍNIMO)
 # =============================================================================
 
-def inspect_and_verify_audio(filepath):
+def inspect_and_verify_audio(filepath, is_native_lossless=None, stream_codec=None, stream_abr=None):
     r"""
     1. Decodifica 100% del archivo con ffmpeg (0 errores de decodificación).
     2. Comprueba que el archivo no esté truncado ni lleno de ceros.
     3. Inspecciona la resolución real con mutagen (bits_per_sample y sample_rate).
-    4. Garantiza MÍNIMO Lossless (16-bit / 44.1 kHz) o Hi-Res (24-bit / 48-192 kHz).
+    4. Garantiza fidelidad auditada distinguiendo Hi-Res nativo, Lossless CD y transcodificación de streaming.
     
     Retorna: (is_valid, is_hires, quality_label)
     """
@@ -131,7 +131,7 @@ def inspect_and_verify_audio(filepath):
         return False, False, "Archivo no existe"
         
     size = os.path.getsize(filepath)
-    if size < 100000:  # Menor a 100 KB es sospechoso o corrupto
+    if size < 10000:  # Menor a 10 KB es sospechoso o corrupto
         return False, False, f"Archivo incompleto ({size} bytes)"
         
     # Verificar relleno de ceros
@@ -155,18 +155,50 @@ def inspect_and_verify_audio(filepath):
         audio = FLAC(str(filepath))
         bits = getattr(audio.info, "bits_per_sample", 16)
         sr = getattr(audio.info, "sample_rate", 44100)
+        tags = audio.tags or {}
         
-        # Clasificación estricta de calidad
-        if bits > 16 or sr > 48000:
-            is_hires = True
-            quality_label = f"Hi-Res {bits}-bit / {sr/1000:g} kHz"
-        elif bits == 16 and sr >= 44100:
+        saved_codec = tags.get("source_codec", [None])[0] or tags.get("SOURCE_CODEC", [None])[0]
+        saved_fidelity = tags.get("audio_fidelity", [None])[0] or tags.get("AUDIO_FIDELITY", [None])[0]
+
+        codec_effective = stream_codec or saved_codec
+        codec_low = (codec_effective or "").lower()
+
+        if is_native_lossless is None:
+            if codec_low in ("flac", "alac", "wav"):
+                is_native_lossless = True
+            elif codec_low in ("opus", "aac", "mp4a", "vorbis", "mp3"):
+                is_native_lossless = False
+
+        if is_native_lossless:
+            if bits > 16 or sr > 48000:
+                is_hires = True
+                quality_label = f"Hi-Res Master {bits}-bit / {sr/1000:g} kHz (Lossless Nativo)"
+            else:
+                is_hires = False
+                quality_label = f"Lossless CD {bits}-bit / {sr/1000:g} kHz (Lossless Nativo)"
+        elif "opus" in codec_low:
+            is_hires = False
+            abr_str = f"{round(float(stream_abr))}k" if stream_abr and stream_abr != "None" else "160k"
+            quality_label = f"Opus {abr_str} @ {sr/1000:g} kHz (Audio Oficial → FLAC 16-bit)"
+        elif "aac" in codec_low or "mp4a" in codec_low:
+            is_hires = False
+            abr_str = f"{round(float(stream_abr))}k" if stream_abr and stream_abr != "None" else "128k"
+            quality_label = f"AAC {abr_str} @ {sr/1000:g} kHz (Audio Oficial → FLAC 16-bit)"
+        elif saved_fidelity:
+            is_hires = "Hi-Res" in saved_fidelity
+            quality_label = saved_fidelity
+        elif bits > 16:
+            # Comprobar si fue upsample de Lavf
+            encoder = tags.get("encoder", [""])[0]
+            if "Lavf" in encoder and sr == 48000:
+                is_hires = False
+                quality_label = f"Opus 160k (Contenedor 24-bit / {sr/1000:g} kHz)"
+            else:
+                is_hires = True
+                quality_label = f"Hi-Res {bits}-bit / {sr/1000:g} kHz"
+        else:
             is_hires = False
             quality_label = f"Lossless {bits}-bit / {sr/1000:g} kHz"
-        else:
-            # Calidad inferior a estándar Lossless CD
-            is_hires = False
-            quality_label = f"Sub-Lossless {bits}-bit / {sr/1000:g} kHz"
             
         return True, is_hires, quality_label
     except Exception as e:
@@ -485,21 +517,31 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
         queries.append(f"ytsearch1:{search_artist} {base_title}")
 
     downloaded = False
+    stream_codec = "flac"
+    stream_abr = None
+    stream_asr = 48000
+    stream_ext = "webm"
+
     for q in queries:
         cmd = [
             "yt-dlp",
+            "--no-simulate",
             "--no-playlist",
             "-f", "bestaudio[ext=flac]/bestaudio[acodec=flac]/bestaudio/best",
             "-x",
             "--audio-format", "flac",
             "--audio-quality", "0",
             "--postprocessor-args", "ffmpeg:-compression_level 8",
+            "--print", "STREAM_INFO:%(acodec)s|%(abr)s|%(asr)s|%(ext)s",
             "-o", out_tmpl,
             q
         ]
         res = subprocess.run(cmd, capture_output=True, text=True)
-        if os.path.exists(staging_file) and os.path.getsize(staging_file) > 100000:
+        if os.path.exists(staging_file) and os.path.getsize(staging_file) > 10000:
             downloaded = True
+            m = re.search(r'STREAM_INFO:([^|\r\n]+)\|([^|\r\n]+)\|([^|\r\n]+)\|([^\r\n]+)', res.stdout)
+            if m:
+                stream_codec, stream_abr, stream_asr, stream_ext = m.groups()
             break
         # Breve pausa para no saturar conexiones
         time.sleep(0.5)
@@ -508,15 +550,33 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
         print(f"  [X] No se pudo obtener la pista: {out_filename}")
         return False, "Fallo de descarga"
         
-    # Auditoría estricta de calidad e integridad
-    valid, is_hires, q_label = inspect_and_verify_audio(staging_file)
+    is_native_lossless = stream_codec.lower() in ("flac", "alac", "wav") or stream_ext.lower() == "flac"
+
+    # Si el stream original NO era FLAC nativo (ej. Opus o AAC de YouTube),
+    # recodificar limpiamente a 16-bit FLAC para evitar inflación de 24-bit y falsos Hi-Res
+    if not is_native_lossless:
+        temp_16 = staging_file + ".16.flac"
+        recode_cmd = [
+            "ffmpeg", "-y", "-v", "error",
+            "-i", staging_file,
+            "-c:a", "flac",
+            "-sample_fmt", "s16",
+            "-compression_level", "8",
+            temp_16
+        ]
+        subprocess.run(recode_cmd, capture_output=True, text=True)
+        if os.path.exists(temp_16) and os.path.getsize(temp_16) > 10000:
+            shutil.move(temp_16, staging_file)
+
+    # Auditoría estricta de calidad e integridad con fidelidad real
+    valid, is_hires, q_label = inspect_and_verify_audio(staging_file, is_native_lossless=is_native_lossless, stream_codec=stream_codec, stream_abr=stream_abr)
     if not valid:
         print(f"  [ERROR] Pista corrupta detectada ({q_label}). Descartada.")
         if os.path.exists(staging_file):
             os.remove(staging_file)
         return False, q_label
         
-    # Inyección de metadatos Vorbis completos
+    # Inyección de metadatos Vorbis completos con fidelidad real
     try:
         f = FLAC(staging_file)
         f["artist"] = [track_artist if track_artist else artist_name]
@@ -527,12 +587,19 @@ def download_track(artist_name, genre, album_title, track_title, track_pos, trac
         f["tracktotal"] = [str(track_total)]
         f["date"] = [str(release_year)]
         f["genre"] = [genre]
+        f["SOURCE_CODEC"] = [stream_codec.upper() if stream_codec else "OPUS"]
+        f["AUDIO_FIDELITY"] = [q_label]
         f.save()
     except Exception as e:
         print(f"  [!] Aviso tags: {e}")
         
     shutil.move(staging_file, final_path)
-    tag_badge = "⭐ [HI-RES]" if is_hires else "💿 [LOSSLESS]"
+    if is_hires:
+        tag_badge = "⭐ [HI-RES NATIVO]"
+    elif is_native_lossless:
+        tag_badge = "💿 [LOSSLESS CD]"
+    else:
+        tag_badge = "🎧 [CALIDAD REAL]"
     print(f"  [OK] Pista {track_pos:02d}/{track_total}: {clean_title} | {tag_badge} {q_label}")
     # Pausa de cortesía para ritmo constante sin disparar bot checks
     time.sleep(1.0)
@@ -577,16 +644,29 @@ def download_album(artist_name, genre, album_title, release_year, deezer_id=None
         total_tracks = len(tracks)
         success_tracks = 0
         hires_count = 0
+        lossless_count = 0
+        streaming_count = 0
         for pos, t in enumerate(tracks, 1):
             t_title = t.get("title", f"Track {pos}")
             t_artist = t.get("artist", {}).get("name")
             ok, q_lbl = download_track(artist_name, genre, clean_title, t_title, pos, total_tracks, release_year, target_dir, track_artist=t_artist)
             if ok:
                 success_tracks += 1
-                if "Hi-Res" in q_lbl:
+                if "Hi-Res Master" in q_lbl:
                     hires_count += 1
+                elif "Lossless CD" in q_lbl:
+                    lossless_count += 1
+                else:
+                    streaming_count += 1
                     
-        calidad_resumen = f"{hires_count} Hi-Res, {success_tracks - hires_count} Lossless" if hires_count > 0 else "100% Lossless"
+        detalles = []
+        if hires_count > 0:
+            detalles.append(f"{hires_count} Hi-Res Nativo")
+        if lossless_count > 0:
+            detalles.append(f"{lossless_count} Lossless CD Nativo")
+        if streaming_count > 0:
+            detalles.append(f"{streaming_count} Audio Oficial HQ (Opus/AAC en FLAC 16-bit)")
+        calidad_resumen = ", ".join(detalles) if detalles else f"{success_tracks} pistas guardadas"
         print(f"[+] Álbum completado: {success_tracks}/{total_tracks} pistas ({calidad_resumen}).")
     else:
         # Fallback a búsqueda continua

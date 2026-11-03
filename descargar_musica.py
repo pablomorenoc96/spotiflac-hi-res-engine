@@ -68,7 +68,9 @@ def main():
             download_cover(cover_url, cover_file)
 
     success = 0
-    hires = 0
+    hires_count = 0
+    lossless_count = 0
+    streaming_count = 0
     for pos, t in enumerate(tracks, 1):
         t_title = t.get("title", f"Track {pos}")
         t_artist = t.get("artist", {}).get("name")
@@ -76,15 +78,26 @@ def main():
         ok, label = download_single_track(artist, album, t_title, pos, total_tracks, year, genre, target_dir, track_artist=t_artist)
         if ok:
             success += 1
-            if "Hi-Res" in label:
-                hires += 1
+            if "Hi-Res Master" in label:
+                hires_count += 1
+            elif "Lossless CD" in label:
+                lossless_count += 1
+            else:
+                streaming_count += 1
             print(f"      -> OK ({label})")
         else:
             print(f"      -> ERROR al descargar")
 
     print("\n" + "=" * 80)
     print(f"DESCARGA COMPLETADA: {success}/{total_tracks} pistas guardadas.")
-    print(f"Calidad: {hires} en Hi-Res 24-bit, {success - hires} en Lossless 16-bit.")
+    detalles = []
+    if hires_count > 0:
+        detalles.append(f"{hires_count} Hi-Res Nativo")
+    if lossless_count > 0:
+        detalles.append(f"{lossless_count} Lossless CD Nativo")
+    if streaming_count > 0:
+        detalles.append(f"{streaming_count} Audio Oficial HQ (Opus/AAC en FLAC 16-bit)")
+    print(f"Calidad Real: {', '.join(detalles) if detalles else str(success) + ' pistas'}")
     print(f"Destino: {target_dir}")
     print("=" * 80)
 
