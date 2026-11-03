@@ -13,10 +13,14 @@
 
 ## ✨ Key Features
 
-* **2-Tier Audio Quality Pipeline**:
-  * ⭐ **Priority 1**: Studio Master **Hi-Res 24-bit / 48–192 kHz**.
-  * 💿 **Priority 2 (Guaranteed Fallback)**: CD Quality **Lossless FLAC 16-bit / 44.1 kHz**.
-  * 🚫 **Absolute Zero Lossy**: Rejects MP3s, truncated streams, or fake up-sampled audio.
+* **Transparent Audio Fidelity & Anti-Upsampling Protection**:
+  * ⭐ **Hi-Res Studio Master (24-bit / 48–192 kHz)**: Preserved natively without downsampling for genuine lossless master files.
+  * 💿 **CD Lossless (16-bit / 44.1 kHz)**: Standard Red Book CD audio quality.
+  * 🎧 **Acoustic Integrity & Honest Tagging**: Detects stream source codecs on-the-fly (`STREAM_INFO: Opus/AAC`). Automatically prevents artificial 24-bit container bloat by encoding streaming audio into clean 16-bit FLAC, saving ~50% disk storage while tagging exact source fidelity (`SOURCE_CODEC`, `AUDIO_FIDELITY`).
+* **Automated Anti-Bot & JS Challenge Solver**:
+  * Seamless integration with Node.js EJS solver (`--remote-components ejs:github`) and browser session authentication to prevent *"Sign in to confirm you're not a bot"* rate blocks.
+* **Per-Track Performer & Collaborative Search**:
+  * Resolves per-track guest and collaborative artists on split or multi-artist albums to guarantee 100% track retrieval rates.
 * **Acoustic Integrity Gate**:
   * Every audio file is audited on-the-fly with an end-to-end decode pass using `ffmpeg -v error -i <file> -f null -`. Files with even 1 byte of corruption are discarded and re-downloaded from alternate streams.
 * **Modern Desktop GUI (PyWebView & Edge WebView2)**:
@@ -141,14 +145,6 @@ Scans all cataloged artist folders in parallel, discovers official new studio re
 ├── INICIAR_APP.bat             # 1-click GUI desktop launcher
 ├── DESCARGAR_DISCOGRAFIA.bat   # 1-click full discography downloader
 ├── descargar_discografia.py    # Complete discography downloader script
-├── ACTUALIZAR_BIBLIOTECA.bat   # 1-click batch library updater
-├── actualizar_biblioteca.py    # Library updater script
-├── DESCARGAR_MUSICA.bat        # 1-click interactive CLI downloader
-├── descargar_musica.py         # Interactive CLI downloader script
-├── requirements.txt            # Python dependencies
-├── .gitignore                  # Audio, images, cache & local exclusion rules
-└── LICENSE                     # MIT License
-```
 ├── ACTUALIZAR_BIBLIOTECA.bat   # 1-click batch library updater
 ├── actualizar_biblioteca.py    # Library updater script
 ├── DESCARGAR_MUSICA.bat        # 1-click interactive CLI downloader
